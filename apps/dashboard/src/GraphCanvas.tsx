@@ -3,46 +3,16 @@ import {
   BackgroundVariant,
   Controls,
   MarkerType,
+  MiniMap,
   ReactFlow,
   type Edge,
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { GraphEdgeDto, GraphNodeDto } from "./api";
+import { COLOR, layoutGraph } from "./layout";
 
-const COLUMN: Record<string, number> = {
-  repository: 0,
-  file: 0,
-  route: 1,
-  api_operation: 1,
-  frontend_operation: 1,
-  queue: 1,
-  symbol: 2,
-  database_table: 3,
-  test: 3,
-  service: 3,
-  deployment: 3,
-};
-
-const COLOR: Record<string, string> = {
-  repository: "#8b98aa",
-  file: "#6e8bb5",
-  route: "#4caf7d",
-  api_operation: "#38b2a3",
-  frontend_operation: "#d9a441",
-  queue: "#a97bd9",
-  symbol: "#5b8cff",
-  database_table: "#e06c75",
-  test: "#7cc47f",
-  service: "#8b98aa",
-  deployment: "#8b98aa",
-};
-
-function stableHash(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-  return Math.abs(h);
-}
+type FlowData = { label: string; nodeType: string };
 
 export interface GraphCanvasProps {
   nodes: GraphNodeDto[];
@@ -53,20 +23,32 @@ export interface GraphCanvasProps {
 }
 
 export function GraphCanvas({ nodes, edges, affectedIds, selectedId, onSelect }: GraphCanvasProps) {
-  const columns = new Map<number, number>();
-  const flowNodes: Node[] = nodes.map((n) => {
-    const col = COLUMN[n.type] ?? 2;
-    const row = columns.get(col) ?? 0;
-    columns.set(col, row + 1);
+  const position = layoutGraph(nodes, edges);
+  const visible = new Set(nodes.map((n) => n.id));
+
+  // Direct neighbours of the selection — everything else dims so the local
+  // dependency picture stays readable at any graph size.
+  const focus = new Set<string>();
+  if (selectedId) {
+    focus.add(selectedId);
+    for (const e of edges) {
+      if (e.sourceId === selectedId) focus.add(e.targetId);
+      else if (e.targetId === selectedId) focus.add(e.sourceId);
+    }
+  }
+
+  const flowNodes: Node<FlowData>[] = nodes.map((n) => {
     const selected = n.id === selectedId;
     const affected = affectedIds.has(n.id);
+    const dimmed = selected
+      ? false
+      : affectedIds.size > 0
+        ? !affected
+        : selectedId !== null && !focus.has(n.id);
     return {
       id: n.id,
-      position: {
-        x: col * 340 + (stableHash(n.id) % 5) * 24,
-        y: row * 84 + (stableHash(n.id + "y") % 4) * 18,
-      },
-      data: { label: `${n.name}${n.startLine ? `:${n.startLine}` : ""}` },
+      position: position.get(n.id) ?? { x: 0, y: 0 },
+      data: { label: `${n.name}${n.startLine ? `:${n.startLine}` : ""}`, nodeType: n.type },
       style: {
         backgroundColor: selected ? "#182031" : "#121824",
         color: "#e8eef7",
@@ -82,31 +64,44 @@ export function GraphCanvas({ nodes, edges, affectedIds, selectedId, onSelect }:
           : affected
             ? "0 0 0 3px rgba(255,138,61,0.2)"
             : "0 1px 2px rgba(0,0,0,0.35)",
-        opacity: selected || affected || affectedIds.size === 0 ? 1 : 0.5,
+        opacity: dimmed ? 0.25 : 1,
       },
     };
   });
 
-  const visible = new Set(nodes.map((n) => n.id));
   const flowEdges: Edge[] = edges
     .filter((e) => visible.has(e.sourceId) && visible.has(e.targetId))
-    .map((e) => ({
-      id: e.id,
-      source: e.sourceId,
-      target: e.targetId,
-      label: e.type,
-      labelStyle: { fill: "#93a1b5", fontSize: 10 },
-      labelBgStyle: { fill: "#0d1117" },
-      style: {
-        stroke: affectedIds.has(e.sourceId) && affectedIds.has(e.targetId) ? "#ff8a3d" : "#3c4a61",
-        strokeOpacity: e.confidence < 1 ? 0.6 : 0.95,
-      },
-      animated: affectedIds.has(e.sourceId) && affectedIds.has(e.targetId),
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color: affectedIds.has(e.sourceId) && affectedIds.has(e.targetId) ? "#ff8a3d" : "#3c4a61",
-      },
-    }));
+    .map((e) => {
+      const impact = affectedIds.has(e.sourceId) && affectedIds.has(e.targetId);
+      const hot =
+        impact || (selectedId !== null && (e.sourceId === selectedId || e.targetId === selectedId));
+      const color = impact ? "#ff8a3d" : hot ? "#5e8bff" : "#3c4a61";
+      return {
+        id: e.id,
+        source: e.sourceId,
+        target: e.targetId,
+        type: "smoothstep",
+        // edge labels only on highlighted edges — a large graph stays readable
+        ...(hot ? { label: e.type } : {}),
+        labelStyle: { fill: "#93a1b5", fontSize: 10 },
+        labelBgStyle: { fill: "#0d1117" },
+        style: {
+          stroke: color,
+          strokeWidth: hot ? 2 : 1,
+          strokeOpacity: hot
+            ? 0.95
+            : affectedIds.size > 0 || selectedId
+              ? 0.16
+              : e.confidence < 1
+                ? 0.6
+                : 0.9,
+        },
+        animated: impact,
+        markerEnd: { type: MarkerType.ArrowClosed, color },
+      };
+    });
+
+  const presentTypes = new Set(nodes.map((n) => n.type));
 
   return (
     <ReactFlow
@@ -115,11 +110,31 @@ export function GraphCanvas({ nodes, edges, affectedIds, selectedId, onSelect }:
       fitView
       minZoom={0.15}
       colorMode="dark"
+      nodesDraggable={false}
       onNodeClick={(_, node) => onSelect(node.id)}
       proOptions={{ hideAttribution: true }}
     >
       <Background variant={BackgroundVariant.Dots} gap={18} color="#1e2733" />
-      <Controls showInteractive={false} />
+      <Controls showInteractive={false} position="bottom-left" />
+      <MiniMap
+        pannable
+        zoomable
+        position="bottom-right"
+        bgColor="#0d1117"
+        maskColor="rgba(8,10,14,0.72)"
+        nodeStrokeWidth={0}
+        nodeColor={(n) => COLOR[(n.data as FlowData).nodeType] ?? "#5d6b7f"}
+      />
+      <div className="graph-legend" aria-hidden="true">
+        {Object.keys(COLOR)
+          .filter((t) => presentTypes.has(t))
+          .map((t) => (
+            <span key={t}>
+              <i style={{ background: COLOR[t] }} />
+              {t.replace(/_/g, " ")}
+            </span>
+          ))}
+      </div>
     </ReactFlow>
   );
 }

@@ -93,6 +93,7 @@ header {
   background: rgba(13, 17, 23, 0.85);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
   z-index: 10;
 }
 header .brand {
@@ -418,6 +419,12 @@ footer.status span.warn {
   flex: 1;
   width: auto;
 }
+header .index-form {
+  margin-left: auto;
+  flex: 1 1 320px;
+  max-width: 460px;
+  width: auto;
+}
 
 .hero {
   display: grid;
@@ -468,4 +475,127 @@ footer.status span.warn {
 .react-flow__edge-text {
   fill: var(--dim);
   font-size: 10px;
+}
+.graph-legend {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  max-width: min(440px, calc(100% - 24px));
+  padding: 7px 11px;
+  background: rgba(13, 17, 23, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  font-size: 10.5px;
+  color: var(--dim);
+  pointer-events: none;
+}
+.graph-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.graph-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+/* Small laptops / tablets: inspector drops below the canvas */
+@media (max-width: 1100px) {
+  main {
+    grid-template-columns: 250px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "explorer canvas"
+      "inspector inspector";
+  }
+  aside.explorer {
+    grid-area: explorer;
+  }
+  section.canvas {
+    grid-area: canvas;
+  }
+  .inspector {
+    grid-area: inspector;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: 36vh;
+  }
+}
+
+/* Phones: canvas-first single column, page scrolls */
+@media (max-width: 760px) {
+  html,
+  body,
+  #root,
+  .app {
+    height: auto;
+  }
+  .app {
+    min-height: 100%;
+  }
+  header {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  header .mono {
+    order: 8;
+    flex-basis: 100%;
+  }
+  header .index-form {
+    order: 9;
+    flex-basis: 100%;
+    flex: 1 1 100%;
+    max-width: none;
+    margin-left: 0;
+  }
+  main {
+    display: flex;
+    flex-direction: column;
+  }
+  .canvas {
+    order: -1;
+    height: 55vh;
+    min-height: 320px;
+  }
+  aside.explorer,
+  .inspector {
+    max-height: none;
+    overflow: visible;
+    border: none;
+    border-top: 1px solid var(--border);
+  }
+  .node-list,
+  .impact-list ul {
+    max-height: 45vh;
+    overflow-y: auto;
+  }
+  .hero {
+    padding: 28px 20px;
+    margin: 12px;
+  }
+  .canvas .banner {
+    left: 10px;
+    right: 10px;
+    transform: none;
+  }
+  footer.status {
+    flex-wrap: wrap;
+  }
+  .center {
+    min-height: 50vh;
+  }
+  .react-flow__minimap {
+    display: none;
+  }
+  input,
+  select {
+    font-size: 16px; /* iOS: prevent zoom-on-focus */
+  }
 }

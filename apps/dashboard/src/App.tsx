@@ -256,6 +256,7 @@ export function App() {
             <div className="center muted">No nodes match the current filters.</div>
           ) : (
             <GraphCanvas
+              key={repoId ?? "none"}
               nodes={visibleNodes}
               edges={edges}
               affectedIds={affectedIds}
