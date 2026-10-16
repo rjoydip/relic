@@ -76,11 +76,7 @@ function FlowNodeCard({ data }: NodeProps<Node<FlowData>>) {
   );
 }
 
-function GroupLabelCard({ data }: NodeProps<Node<FlowData>>) {
-  return <span>{data.label}</span>;
-}
-
-const NODE_TYPES = { flow: FlowNodeCard, groupLabel: GroupLabelCard };
+const NODE_TYPES = { flow: FlowNodeCard };
 
 export function GraphCanvas(props: GraphCanvasProps) {
   return (
@@ -141,25 +137,6 @@ function FlowView({
     };
   });
 
-  // one heading per type column, aligned to the layout — the graph reads as
-  // organised groups instead of a floating sheet of cards
-  const presentTypes = new Set(nodes.map((n) => n.type));
-  const groupLabels: Node<FlowData>[] = [...presentTypes].map((t) => {
-    const first = nodes.find((n) => n.type === t);
-    const x = first ? (position.get(first.id)?.x ?? 0) : 0;
-    return {
-      id: `group:${t}`,
-      type: "groupLabel",
-      position: { x, y: -52 },
-      data: { label: t.replace(/_/g, " "), nodeType: t },
-      className: "group-label",
-      draggable: false,
-      selectable: false,
-      deletable: false,
-      focusable: false,
-    };
-  });
-
   const flowEdges: Edge[] = edges
     .filter((e) => visible.has(e.sourceId) && visible.has(e.targetId))
     .map((e) => {
@@ -189,7 +166,7 @@ function FlowView({
 
   return (
     <ReactFlow
-      nodes={[...flowNodes, ...groupLabels]}
+      nodes={flowNodes}
       edges={flowEdges}
       nodeTypes={NODE_TYPES}
       fitView
