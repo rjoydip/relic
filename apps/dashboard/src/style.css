@@ -21,9 +21,8 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
   /* graph surface — turbo.build (turbo-flow) language: #111 cards,
-     hairline #333 borders, gray edges; the canvas is a faint wash of the
-     live accent so the picker re-tints the whole graph */
-  --canvas: color-mix(in srgb, var(--accent) 5%, #0a0a0a);
+     hairline #333 borders, gray edges; the canvas matches the side panel */
+  --canvas: var(--panel);
   --node-bg: #111111;
   --node-bg-sel: #1c1c1c;
   --node-border: #262626;
@@ -48,7 +47,7 @@
   --red: #d64545;
   --shadow: 0 1px 2px rgba(20, 35, 70, 0.08);
   --shadow-lg: 0 12px 40px rgba(20, 35, 70, 0.14);
-  --canvas: color-mix(in srgb, var(--accent) 7%, #eef1f6);
+  --canvas: var(--panel);
   --node-bg: #ffffff;
   --node-bg-sel: #f0f4ff;
   --node-border: #e4e4e7;
