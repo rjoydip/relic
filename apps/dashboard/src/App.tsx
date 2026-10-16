@@ -9,6 +9,7 @@ import {
   type Repository,
 } from "./api";
 import { GraphCanvas } from "./GraphCanvas";
+import { COLOR } from "./layout";
 import { NodeInspector } from "./NodeInspector";
 import { ancestorsOf, buildTree } from "./tree";
 
@@ -57,6 +58,11 @@ export function App() {
   const [typeFilter, setTypeFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const [explorerView, setExplorerView] = useState<"tree" | "flat">(() =>
+    localStorage.getItem("mcpdg-explorer") === "flat" ? "flat" : "tree",
+  );
   const [error, setError] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [theme, setTheme] = useState<"dark" | "light">(() =>
@@ -79,6 +85,10 @@ export function App() {
       localStorage.removeItem("mcpdg-accent");
     }
   }, [accent]);
+
+  useEffect(() => {
+    localStorage.setItem("mcpdg-explorer", explorerView);
+  }, [explorerView]);
 
   const repo = repositories.find((r) => r.id === repoId) ?? null;
 
@@ -126,7 +136,7 @@ export function App() {
   const analyzeImpact = useCallback(
     async (symbol: string) => {
       if (!repoId || !symbol.trim()) return;
-      setBusy(true);
+      setAnalyzing(true);
       setError(null);
       try {
         const result = await api.impact(repoId, symbol.trim(), 5);
@@ -136,10 +146,24 @@ export function App() {
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
-        setBusy(false);
+        setAnalyzing(false);
       }
     },
     [repoId],
+  );
+
+  // switching repositories loads the new graph under a canvas overlay — the
+  // index/re-index buttons must not light up ("Working…") for an impact
+  // analysis or a repo switch, so each action owns its own busy flag
+  const switchRepo = useCallback(
+    (id: string) => {
+      setRepoId(id);
+      setSwitching(true);
+      loadGraph(id)
+        .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+        .finally(() => setSwitching(false));
+    },
+    [loadGraph],
   );
 
   const reindex = useCallback(async () => {
@@ -232,6 +256,7 @@ export function App() {
   const explorer = useFileTree({
     paths: explorerTree.paths,
     initialExpansion: "closed",
+    icons: { set: "standard", colored: true },
     onSelectionChange: (selected) => {
       const node = nav.current.explorer.get(selected.at(-1) ?? "");
       if (node) nav.current.select(node.id);
@@ -240,6 +265,7 @@ export function App() {
   const impactModel = useFileTree({
     paths: impactTree.paths,
     initialExpansion: "open",
+    icons: { set: "standard", colored: true },
     onSelectionChange: (selected) => {
       const node = nav.current.impact.get(selected.at(-1) ?? "");
       if (node) nav.current.select(node.id);
@@ -331,7 +357,7 @@ export function App() {
         </span>
         <select
           value={repoId ?? ""}
-          onChange={(e) => setRepoId(e.target.value)}
+          onChange={(e) => switchRepo(e.target.value)}
           aria-label="Repository"
         >
           {repositories.map((r) => (
@@ -349,7 +375,27 @@ export function App() {
 
       <main>
         <aside className="explorer">
-          <h2>Explorer</h2>
+          <h2>
+            Explorer
+            <span className="view-toggle">
+              <button
+                className={explorerView === "tree" ? "on" : ""}
+                onClick={() => setExplorerView("tree")}
+                title="File tree"
+                aria-pressed={explorerView === "tree"}
+              >
+                🗂
+              </button>
+              <button
+                className={explorerView === "flat" ? "on" : ""}
+                onClick={() => setExplorerView("flat")}
+                title="Flat list"
+                aria-pressed={explorerView === "flat"}
+              >
+                ☰
+              </button>
+            </span>
+          </h2>
           <input
             placeholder="Search nodes…"
             value={query}
@@ -368,6 +414,23 @@ export function App() {
             ))}
           </select>
 
+          {explorerView === "flat" ? (
+            <ul className="node-list">
+              {visibleNodes.slice(0, 80).map((n) => (
+                <li key={n.id}>
+                  <button className="link" onClick={() => selectNode(n.id)}>
+                    {n.name}
+                  </button>
+                  <span className="pill" style={{ color: COLOR[n.type] ?? "#5d6b7f" }}>
+                    {n.type}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <FileTree model={explorer.model} className="graph-tree" />
+          )}
+
           <h2>Impact</h2>
           <input
             placeholder="Symbol, e.g. UserService.updateUser"
@@ -377,9 +440,9 @@ export function App() {
           />
           <button
             onClick={() => void analyzeImpact(impactSymbol)}
-            disabled={busy || !impactSymbol.trim()}
+            disabled={analyzing || !impactSymbol.trim()}
           >
-            Analyze impact
+            {analyzing ? "Analyzing…" : "Analyze impact"}
           </button>
 
           {impact && (
@@ -389,14 +452,17 @@ export function App() {
                 {impact.summary.affectedTests} tests · {impact.summary.unresolvedRelationships}{" "}
                 unresolved
               </p>
-              <FileTree model={impactModel} className="graph-tree" />
+              <FileTree model={impactModel} className="graph-tree impact-tree" />
             </>
           )}
-
-          <FileTree model={explorer.model} className="graph-tree" />
         </aside>
 
         <section className="canvas">
+          {switching && (
+            <div className="canvas-loader" role="status" aria-label="Loading repository">
+              <div className="spinner" />
+            </div>
+          )}
           {error && <div className="error banner">{error}</div>}
           {showPeek && (
             <button className="peek" onClick={() => setInspectorOpen(true)}>
@@ -409,6 +475,7 @@ export function App() {
             <GraphCanvas
               key={repoId ?? "none"}
               theme={theme}
+              accent={accent || "#5e8bff"}
               nodes={visibleNodes}
               edges={edges}
               affectedIds={affectedIds}
@@ -432,19 +499,34 @@ export function App() {
       <footer className="status">
         {status ? (
           <>
-            <span>{status.fileCount} files</span>
-            <span>{status.nodeCount} nodes</span>
-            <span>{status.edgeCount} edges</span>
-            <span>{status.durationMs !== null ? `${status.durationMs} ms` : "—"}</span>
+            <span>
+              <StatIcon d={ICON.file} />
+              {status.fileCount} files
+            </span>
+            <span>
+              <StatIcon d={ICON.nodes} />
+              {status.nodeCount} nodes
+            </span>
+            <span>
+              <StatIcon d={ICON.edges} />
+              {status.edgeCount} edges
+            </span>
+            <span>
+              <StatIcon d={ICON.clock} />
+              {status.durationMs !== null ? `${status.durationMs} ms` : "—"}
+            </span>
             <span className="mono">
+              <StatIcon d={ICON.rev} />
               rev {status.lastRevision ? status.lastRevision.slice(0, 10) : "none"}
             </span>
             <span>
+              <StatIcon d={ICON.calendar} />
               {status.indexedAt
                 ? `indexed ${status.indexedAt.slice(0, 19).replace("T", " ")}`
                 : "never indexed"}
             </span>
             <span className={status.diagnostics.length > 0 ? "warn" : ""}>
+              <StatIcon d={ICON.warn} />
               {status.diagnostics.length} diagnostics
             </span>
           </>
@@ -455,6 +537,32 @@ export function App() {
     </div>
   );
 }
+
+function StatIcon({ d }: { d: string }) {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
+      <path
+        d={d}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+const ICON = {
+  file: "M4 1.8h5l3 3v9.4H4z M9 1.8v3h3",
+  nodes: "M3.2 6.2h3.2v3.2H3.2z M9.6 6.2h3.2v3.2H9.6z",
+  edges:
+    "M6.8 9.2l2.4-2.4 M5.4 7.6L4.2 8.8a2.3 2.3 0 0 0 3.2 3.2l1.2-1.2 M10.6 8.4l1.2-1.2a2.3 2.3 0 0 0-3.2-3.2L7.4 5.2",
+  clock: "M8 4.4V8l2.4 1.4 M14 8A6 6 0 1 1 2 8a6 6 0 0 1 12 0",
+  rev: "M5 3v10 M11 3v10 M5 8h6",
+  calendar: "M3 4.2h10v8.6H3z M3 7h10 M6 2.4v2.8 M10 2.4v2.8",
+  warn: "M8 2.8l5.6 9.6H2.4z M8 6.8v2.6 M8 10.8v.4",
+};
 
 function IndexForm({
   busy,

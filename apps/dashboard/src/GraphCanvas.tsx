@@ -2,6 +2,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  MarkerType,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -19,8 +20,14 @@ type FlowData = { label: string; nodeType: string };
 const NODE_W = 210;
 const NODE_H = 44;
 
+// concrete hex for edge/marker colours (SVG attributes can't resolve var())
+const EDGE_HEX: Record<"dark" | "light", string> = { dark: "#3a4457", light: "#c2ccd9" };
+const ORANGE_HEX: Record<"dark" | "light", string> = { dark: "#ff8a3d", light: "#dd6610" };
+
 export interface GraphCanvasProps {
   theme?: "dark" | "light";
+  /** resolved accent hex — markers track it live with the color picker */
+  accent?: string;
   nodes: GraphNodeDto[];
   edges: GraphEdgeDto[];
   affectedIds: Set<string>;
@@ -37,38 +44,11 @@ function FlowNodeCard({ data }: NodeProps<Node<FlowData>>) {
   );
 }
 
-const NODE_TYPES = { flow: FlowNodeCard };
-
-// one marker per edge state, colour follows the theme via CSS custom
-// properties (markers referenced as url(#id), as in the RF markers example)
-function EdgeDefs() {
-  const markers = [
-    { id: "base", fill: "var(--edge)" },
-    { id: "faint", fill: "var(--edge)", opacity: 0.16 },
-    { id: "focus", fill: "var(--accent)" },
-    { id: "impact", fill: "var(--orange)" },
-  ];
-  return (
-    <svg className="flow-defs" aria-hidden="true" focusable="false">
-      <defs>
-        {markers.map((m) => (
-          <marker
-            key={m.id}
-            id={`mcpdg-arrow-${m.id}`}
-            viewBox="0 0 10 10"
-            refX="9"
-            refY="5"
-            markerWidth="8"
-            markerHeight="8"
-            orient="auto"
-          >
-            <path d="M0 0L10 5L0 10z" style={{ fill: m.fill, fillOpacity: m.opacity ?? 1 }} />
-          </marker>
-        ))}
-      </defs>
-    </svg>
-  );
+function GroupLabelCard({ data }: NodeProps<Node<FlowData>>) {
+  return <span>{data.label}</span>;
 }
+
+const NODE_TYPES = { flow: FlowNodeCard, groupLabel: GroupLabelCard };
 
 export function GraphCanvas(props: GraphCanvasProps) {
   return (
@@ -80,6 +60,7 @@ export function GraphCanvas(props: GraphCanvasProps) {
 
 function FlowView({
   theme = "dark",
+  accent = "#5e8bff",
   nodes,
   edges,
   affectedIds,
@@ -134,6 +115,26 @@ function FlowView({
     };
   });
 
+  // one heading per type column, aligned to the layout — the graph reads as
+  // organised groups instead of a floating sheet of cards
+  const presentTypes = new Set(nodes.map((n) => n.type));
+  const groupLabels: Node<FlowData>[] = [...presentTypes].map((t) => {
+    const first = nodes.find((n) => n.type === t);
+    const x = first ? (position.get(first.id)?.x ?? 0) : 0;
+    return {
+      id: `group:${t}`,
+      type: "groupLabel",
+      position: { x, y: -52 },
+      data: { label: t.replace(/_/g, " "), nodeType: t },
+      className: "group-label",
+      draggable: false,
+      selectable: false,
+      deletable: false,
+      focusable: false,
+      style: { "--node-accent": COLOR[t] ?? "#5d6b7f" } as CSSProperties,
+    };
+  });
+
   const flowEdges: Edge[] = edges
     .filter((e) => visible.has(e.sourceId) && visible.has(e.targetId))
     .map((e) => {
@@ -141,7 +142,6 @@ function FlowView({
       const hot =
         impact || (selectedId !== null && (e.sourceId === selectedId || e.targetId === selectedId));
       const dimming = affectedIds.size > 0 || (selectedId !== null && !hot);
-      const marker = impact ? "impact" : hot ? "focus" : dimming ? "faint" : "base";
       return {
         id: e.id,
         source: e.sourceId,
@@ -157,15 +157,16 @@ function FlowView({
           strokeOpacity: hot ? 0.95 : dimming ? 0.16 : e.confidence < 1 ? 0.6 : 0.9,
         },
         animated: true,
-        markerEnd: `url(#mcpdg-arrow-${marker})`,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: impact ? ORANGE_HEX[theme] : hot ? accent : EDGE_HEX[theme],
+        },
       };
     });
 
-  const presentTypes = new Set(nodes.map((n) => n.type));
-
   return (
     <ReactFlow
-      nodes={flowNodes}
+      nodes={[...flowNodes, ...groupLabels]}
       edges={flowEdges}
       nodeTypes={NODE_TYPES}
       fitView
@@ -176,12 +177,11 @@ function FlowView({
       onNodeClick={(_, node) => onSelect(node.id)}
       proOptions={{ hideAttribution: true }}
     >
-      <EdgeDefs />
       <Background variant={BackgroundVariant.Dots} gap={18} color="#1e2733" />
       <Controls showInteractive={false} position="bottom-left" />
       <div className="graph-legend" aria-hidden="true">
-        {Object.keys(COLOR)
-          .filter((t) => presentTypes.has(t))
+        {[...presentTypes]
+          .filter((t) => COLOR[t])
           .map((t) => (
             <span key={t}>
               <i style={{ background: COLOR[t] }} />
