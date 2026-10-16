@@ -424,22 +424,10 @@ button.link:hover {
   background: var(--panel-2);
 }
 
-/* trees.software file tree — themed through the --trees-theme-* contract
-   its shadow stylesheet reads; custom properties pierce the shadow root */
+/* trees.software file tree — colors arrive inline via themeToTreeStyles()
+   (src/theme.ts, the documented theming pipeline); this class owns only
+   the host sizing */
 .graph-tree {
-  --trees-accent-override: var(--accent);
-  --trees-theme-sidebar-bg: transparent;
-  --trees-theme-sidebar-fg: var(--text);
-  --trees-theme-sidebar-border: var(--border-2);
-  --trees-theme-sidebar-header-fg: var(--faint);
-  --trees-theme-list-hover-bg: var(--panel-2);
-  --trees-theme-list-active-selection-bg: color-mix(in srgb, var(--accent) 18%, transparent);
-  --trees-theme-list-active-selection-fg: var(--text);
-  --trees-theme-focus-ring: var(--accent);
-  --trees-theme-input-bg: var(--panel-2);
-  --trees-theme-input-fg: var(--text);
-  --trees-theme-input-border: var(--border-2);
-  --trees-theme-scrollbar-thumb: var(--border-2);
   flex: 1;
   min-height: 180px;
 }

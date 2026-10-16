@@ -11,6 +11,7 @@ import {
 import { GraphCanvas } from "./GraphCanvas";
 import { COLOR } from "./layout";
 import { NodeInspector } from "./NodeInspector";
+import { TREE_ICONS, treeThemeStyles } from "./theme";
 import { ancestorsOf, buildTree } from "./tree";
 
 const NODE_TYPES = [
@@ -256,7 +257,7 @@ export function App() {
   const explorer = useFileTree({
     paths: explorerTree.paths,
     initialExpansion: "closed",
-    icons: { set: "standard", colored: true },
+    icons: TREE_ICONS,
     onSelectionChange: (selected) => {
       const node = nav.current.explorer.get(selected.at(-1) ?? "");
       if (node) nav.current.select(node.id);
@@ -265,7 +266,7 @@ export function App() {
   const impactModel = useFileTree({
     paths: impactTree.paths,
     initialExpansion: "open",
-    icons: { set: "standard", colored: true },
+    icons: TREE_ICONS,
     onSelectionChange: (selected) => {
       const node = nav.current.impact.get(selected.at(-1) ?? "");
       if (node) nav.current.select(node.id);
@@ -428,7 +429,11 @@ export function App() {
               ))}
             </ul>
           ) : (
-            <FileTree model={explorer.model} className="graph-tree" />
+            <FileTree
+              model={explorer.model}
+              className="graph-tree"
+              style={treeThemeStyles(theme, accent || "#5e8bff")}
+            />
           )}
 
           <h2>Impact</h2>
@@ -452,7 +457,11 @@ export function App() {
                 {impact.summary.affectedTests} tests · {impact.summary.unresolvedRelationships}{" "}
                 unresolved
               </p>
-              <FileTree model={impactModel} className="graph-tree impact-tree" />
+              <FileTree
+                model={impactModel}
+                className="graph-tree impact-tree"
+                style={treeThemeStyles(theme, accent || "#5e8bff")}
+              />
             </>
           )}
         </aside>
