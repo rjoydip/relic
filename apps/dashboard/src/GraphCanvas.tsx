@@ -156,7 +156,7 @@ function FlowView({
           strokeWidth: hot ? 2 : 1,
           strokeOpacity: hot ? 0.95 : dimming ? 0.16 : e.confidence < 1 ? 0.6 : 0.9,
         },
-        animated: hot,
+        animated: true,
         markerEnd: `url(#mcpdg-arrow-${marker})`,
       };
     });
