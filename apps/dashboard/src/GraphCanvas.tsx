@@ -5,14 +5,20 @@ import {
   MarkerType,
   MiniMap,
   ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
   type Edge,
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { useEffect, useMemo } from "react";
 import type { GraphEdgeDto, GraphNodeDto } from "./api";
 import { COLOR, layoutGraph } from "./layout";
 
 type FlowData = { label: string; nodeType: string };
+
+const NODE_W = 210;
+const NODE_H = 36;
 
 export interface GraphCanvasProps {
   nodes: GraphNodeDto[];
@@ -22,9 +28,29 @@ export interface GraphCanvasProps {
   onSelect: (id: string) => void;
 }
 
-export function GraphCanvas({ nodes, edges, affectedIds, selectedId, onSelect }: GraphCanvasProps) {
-  const position = layoutGraph(nodes, edges);
-  const visible = new Set(nodes.map((n) => n.id));
+export function GraphCanvas(props: GraphCanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <FlowView {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function FlowView({ nodes, edges, affectedIds, selectedId, onSelect }: GraphCanvasProps) {
+  const { setCenter, getViewport } = useReactFlow();
+  const position = useMemo(() => layoutGraph(nodes, edges), [nodes, edges]);
+
+  // Point the view at the selection — sidebar clicks (impact list, search)
+  // must land on the node, not just populate the inspector.
+  useEffect(() => {
+    if (!selectedId) return;
+    const pos = position.get(selectedId);
+    if (!pos) return;
+    setCenter(pos.x + NODE_W / 2, pos.y + NODE_H / 2, {
+      zoom: getViewport().zoom,
+      duration: 400,
+    });
+  }, [selectedId, position, setCenter, getViewport]);
 
   // Direct neighbours of the selection — everything else dims so the local
   // dependency picture stays readable at any graph size.
@@ -36,6 +62,8 @@ export function GraphCanvas({ nodes, edges, affectedIds, selectedId, onSelect }:
       else if (e.targetId === selectedId) focus.add(e.sourceId);
     }
   }
+
+  const visible = new Set(nodes.map((n) => n.id));
 
   const flowNodes: Node<FlowData>[] = nodes.map((n) => {
     const selected = n.id === selectedId;
@@ -56,7 +84,7 @@ export function GraphCanvas({ nodes, edges, affectedIds, selectedId, onSelect }:
         padding: "8px 12px",
         fontSize: 12.5,
         fontWeight: 500,
-        width: 210,
+        width: NODE_W,
         border: `1px solid ${selected ? "#3d5c9e" : affected ? "#8a4a1f" : "#232d3d"}`,
         borderLeft: `3px solid ${COLOR[n.type] ?? "#5d6b7f"}`,
         boxShadow: selected
@@ -120,6 +148,7 @@ export function GraphCanvas({ nodes, edges, affectedIds, selectedId, onSelect }:
         pannable
         zoomable
         position="bottom-right"
+        style={{ width: 180, height: 130 }}
         bgColor="#0d1117"
         maskColor="rgba(8,10,14,0.72)"
         nodeStrokeWidth={0}

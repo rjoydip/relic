@@ -21,6 +21,15 @@ const NODE_TYPES = [
   "queue",
 ];
 
+function passesFilter(n: GraphNodeDto, query: string, typeFilter: string): boolean {
+  if (typeFilter && n.type !== typeFilter) return false;
+  if (query) {
+    const hay = `${n.name} ${n.qualifiedName ?? ""} ${n.filePath ?? ""}`.toLowerCase();
+    if (!hay.includes(query.toLowerCase())) return false;
+  }
+  return true;
+}
+
 export function App() {
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [repoId, setRepoId] = useState<string | null>(null);
@@ -35,8 +44,20 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
 
   const repo = repositories.find((r) => r.id === repoId) ?? null;
+
+  // Switching repositories invalidates selection, impact and filters —
+  // without this reset the old repo's state makes a fresh index look stale.
+  useEffect(() => {
+    setSelected(null);
+    setImpact(null);
+    setImpactSymbol("");
+    setQuery("");
+    setTypeFilter("");
+    setError(null);
+  }, [repoId]);
 
   const loadGraph = useCallback(async (id: string) => {
     const [nodeList, edgeList, indexStatus] = await Promise.all([
@@ -118,6 +139,13 @@ export function App() {
   const selectNode = useCallback(
     (id: string) => {
       const found = nodes.find((n) => n.id === id);
+      // a selection the current filters would hide defeats the point of
+      // navigating to it — drop the filters instead
+      if (found && !passesFilter(found, query, typeFilter)) {
+        setQuery("");
+        setTypeFilter("");
+      }
+      setInspectorOpen(true);
       if (found) setSelected(found);
       else
         void api
@@ -125,7 +153,7 @@ export function App() {
           .then(setSelected)
           .catch(() => setSelected(null));
     },
-    [nodes],
+    [nodes, query, typeFilter],
   );
 
   const affectedIds = useMemo(
@@ -134,15 +162,7 @@ export function App() {
   );
 
   const visibleNodes = useMemo(
-    () =>
-      nodes.filter((n) => {
-        if (typeFilter && n.type !== typeFilter) return false;
-        if (query) {
-          const hay = `${n.name} ${n.qualifiedName ?? ""} ${n.filePath ?? ""}`.toLowerCase();
-          if (!hay.includes(query.toLowerCase())) return false;
-        }
-        return true;
-      }),
+    () => nodes.filter((n) => passesFilter(n, query, typeFilter)),
     [nodes, query, typeFilter],
   );
 
@@ -160,7 +180,7 @@ export function App() {
     );
 
   return (
-    <div className="app">
+    <div className={`app${inspectorOpen ? "" : " inspector-closed"}`}>
       <header>
         <strong className="brand">MCP Dependency Graph</strong>
         <select
@@ -252,6 +272,11 @@ export function App() {
 
         <section className="canvas">
           {error && <div className="error banner">{error}</div>}
+          {!inspectorOpen && (
+            <button className="peek" onClick={() => setInspectorOpen(true)}>
+              ‹ Details
+            </button>
+          )}
           {visibleNodes.length === 0 ? (
             <div className="center muted">No nodes match the current filters.</div>
           ) : (
@@ -271,6 +296,7 @@ export function App() {
           node={selected}
           onSelect={selectNode}
           onAnalyzeImpact={(s) => void analyzeImpact(s)}
+          onCollapse={() => setInspectorOpen(false)}
         />
       </main>
 

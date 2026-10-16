@@ -183,8 +183,33 @@ aside h2 {
   margin: 0;
   word-break: break-all;
 }
+.inspector-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.inspector-head h2 {
+  flex: 1;
+  min-width: 0;
+}
 .inspector > .pill {
   align-self: flex-start;
+}
+.icon-btn {
+  background: transparent;
+  border: 1px solid var(--border-2);
+  color: var(--dim);
+  padding: 1px 8px;
+  font-size: 14px;
+  line-height: 1.4;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+.icon-btn:hover:not(:disabled) {
+  background: var(--panel-3);
+  color: var(--text);
+  border-color: var(--accent);
 }
 h3 {
   font-size: 11px;
@@ -385,6 +410,27 @@ button.link:hover {
   border: 1px solid rgba(244, 112, 103, 0.35);
   box-shadow: var(--shadow);
 }
+.canvas .peek {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  background: var(--panel-2);
+  border: 1px solid var(--border-2);
+  color: var(--dim);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 550;
+  box-shadow: var(--shadow);
+}
+.canvas .peek:hover:not(:disabled) {
+  background: var(--panel-3);
+  color: var(--text);
+  border-color: var(--accent);
+}
+.app.inspector-closed main {
+  grid-template-columns: 270px minmax(0, 1fr);
+}
 
 footer.status {
   display: flex;
@@ -478,13 +524,14 @@ header .index-form {
 }
 .graph-legend {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  right: 10px;
+  bottom: 150px;
   z-index: 5;
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 4px 12px;
-  max-width: min(440px, calc(100% - 24px));
+  max-width: 200px;
   padding: 7px 11px;
   background: rgba(13, 17, 23, 0.85);
   backdrop-filter: blur(8px);
@@ -593,6 +640,14 @@ header .index-form {
   }
   .react-flow__minimap {
     display: none;
+  }
+  .graph-legend {
+    top: 10px;
+    right: auto;
+    bottom: auto;
+    left: 10px;
+    max-width: calc(100% - 24px);
+    justify-content: flex-start;
   }
   input,
   select {
