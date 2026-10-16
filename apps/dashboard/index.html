@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MCP Dependency Graph</title>
+    <script>
+      // apply persisted appearance before first paint (no theme flash)
+      try {
+        const t = localStorage.getItem("mcpdg-theme");
+        if (t) document.documentElement.dataset.theme = t;
+        const a = localStorage.getItem("mcpdg-accent");
+        if (a) document.documentElement.style.setProperty("--accent", a);
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

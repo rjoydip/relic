@@ -45,8 +45,32 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [theme, setTheme] = useState<"dark" | "light">(() =>
+    localStorage.getItem("mcpdg-theme") === "light" ? "light" : "dark",
+  );
+  const [accent, setAccent] = useState(() => localStorage.getItem("mcpdg-accent") ?? "");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("mcpdg-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (accent) {
+      document.documentElement.style.setProperty("--accent", accent);
+      localStorage.setItem("mcpdg-accent", accent);
+    } else {
+      document.documentElement.style.removeProperty("--accent");
+      localStorage.removeItem("mcpdg-accent");
+    }
+  }, [accent]);
 
   const repo = repositories.find((r) => r.id === repoId) ?? null;
+
+  // panel only exists when open AND something is selected — otherwise the
+  // graph takes the full width (and no empty inspector column is reserved)
+  const showInspector = inspectorOpen && selected !== null;
+  const showPeek = !inspectorOpen && selected !== null;
 
   // Switching repositories invalidates selection, impact and filters —
   // without this reset the old repo's state makes a fresh index look stale.
@@ -166,7 +190,13 @@ export function App() {
     [nodes, query, typeFilter],
   );
 
-  if (loading) return <div className="center muted">Loading graph…</div>;
+  if (loading)
+    return (
+      <div className="center">
+        <div className="spinner" />
+        <span className="muted">Loading graph…</span>
+      </div>
+    );
   if (!repositories.length)
     return (
       <div className="center">
@@ -180,9 +210,25 @@ export function App() {
     );
 
   return (
-    <div className={`app${inspectorOpen ? "" : " inspector-closed"}`}>
+    <div className={`app${showInspector ? "" : " inspector-closed"}`}>
       <header>
         <strong className="brand">MCP Dependency Graph</strong>
+        <button
+          className="icon-btn"
+          onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+          title="Toggle dark / light theme"
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? "☀" : "☾"}
+        </button>
+        <input
+          type="color"
+          className="accent-picker"
+          value={accent || "#5e8bff"}
+          onChange={(e) => setAccent(e.target.value)}
+          title="Accent color"
+          aria-label="Accent color"
+        />
         <select
           value={repoId ?? ""}
           onChange={(e) => setRepoId(e.target.value)}
@@ -272,7 +318,7 @@ export function App() {
 
         <section className="canvas">
           {error && <div className="error banner">{error}</div>}
-          {!inspectorOpen && (
+          {showPeek && (
             <button className="peek" onClick={() => setInspectorOpen(true)}>
               ‹ Details
             </button>
@@ -282,6 +328,7 @@ export function App() {
           ) : (
             <GraphCanvas
               key={repoId ?? "none"}
+              theme={theme}
               nodes={visibleNodes}
               edges={edges}
               affectedIds={affectedIds}
@@ -291,13 +338,15 @@ export function App() {
           )}
         </section>
 
-        <NodeInspector
-          repoId={repoId ?? ""}
-          node={selected}
-          onSelect={selectNode}
-          onAnalyzeImpact={(s) => void analyzeImpact(s)}
-          onCollapse={() => setInspectorOpen(false)}
-        />
+        {showInspector && (
+          <NodeInspector
+            repoId={repoId ?? ""}
+            node={selected}
+            onSelect={selectNode}
+            onAnalyzeImpact={(s) => void analyzeImpact(s)}
+            onCollapse={() => setInspectorOpen(false)}
+          />
+        )}
       </main>
 
       <footer className="status">
