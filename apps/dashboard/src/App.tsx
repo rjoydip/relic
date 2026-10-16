@@ -10,6 +10,7 @@ import {
 } from "./api";
 import { GraphCanvas } from "./GraphCanvas";
 import { NodeInspector } from "./NodeInspector";
+import { ancestorsOf, buildTree } from "./tree";
 
 const NODE_TYPES = [
   "symbol",
@@ -41,30 +42,6 @@ function passesFilter(n: GraphNodeDto, query: string, typeFilter: string): boole
     if (!hay.includes(query.toLowerCase())) return false;
   }
   return true;
-}
-
-// tree rows are paths: files sit at their repo path, symbols become
-// selectable leaves under their file (the file row doubles as folder)
-function buildTree(list: GraphNodeDto[]) {
-  const paths: string[] = [];
-  const map = new Map<string, GraphNodeDto>();
-  for (const n of list) {
-    const file = (n.filePath ?? n.name).replaceAll("\\", "/");
-    const path = n.type === "file" ? file : `${file}/${n.name}`;
-    if (!map.has(path)) {
-      map.set(path, n);
-      paths.push(path);
-    }
-  }
-  return { paths, map };
-}
-
-function ancestorsOf(paths: string[]): string[] {
-  const set = new Set<string>();
-  for (const p of paths) {
-    for (let i = p.indexOf("/"); i > 0; i = p.indexOf("/", i + 1)) set.add(p.slice(0, i));
-  }
-  return [...set];
 }
 
 export function App() {
