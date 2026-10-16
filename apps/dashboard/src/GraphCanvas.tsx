@@ -2,12 +2,12 @@ import {
   Background,
   BackgroundVariant,
   Controls,
-  MarkerType,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
   type Edge,
   type Node,
+  type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useEffect, useMemo, type CSSProperties } from "react";
@@ -17,7 +17,7 @@ import { COLOR, layoutGraph } from "./layout";
 type FlowData = { label: string; nodeType: string };
 
 const NODE_W = 210;
-const NODE_H = 36;
+const NODE_H = 44;
 
 export interface GraphCanvasProps {
   theme?: "dark" | "light";
@@ -26,6 +26,48 @@ export interface GraphCanvasProps {
   affectedIds: Set<string>;
   selectedId: string | null;
   onSelect: (id: string) => void;
+}
+
+function FlowNodeCard({ data }: NodeProps<Node<FlowData>>) {
+  return (
+    <>
+      <span className="fn-name">{data.label}</span>
+      <span className="fn-type">{data.nodeType.replace(/_/g, " ")}</span>
+    </>
+  );
+}
+
+const NODE_TYPES = { flow: FlowNodeCard };
+
+// one marker per edge state, colour follows the theme via CSS custom
+// properties (markers referenced as url(#id), as in the RF markers example)
+function EdgeDefs() {
+  const markers = [
+    { id: "base", fill: "var(--edge)" },
+    { id: "faint", fill: "var(--edge)", opacity: 0.16 },
+    { id: "focus", fill: "var(--accent)" },
+    { id: "impact", fill: "var(--orange)" },
+  ];
+  return (
+    <svg className="flow-defs" aria-hidden="true" focusable="false">
+      <defs>
+        {markers.map((m) => (
+          <marker
+            key={m.id}
+            id={`mcpdg-arrow-${m.id}`}
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="8"
+            markerHeight="8"
+            orient="auto"
+          >
+            <path d="M0 0L10 5L0 10z" style={{ fill: m.fill, fillOpacity: m.opacity ?? 1 }} />
+          </marker>
+        ))}
+      </defs>
+    </svg>
+  );
 }
 
 export function GraphCanvas(props: GraphCanvasProps) {
@@ -82,6 +124,7 @@ function FlowView({
         : selectedId !== null && !focus.has(n.id);
     return {
       id: n.id,
+      type: "flow",
       position: position.get(n.id) ?? { x: 0, y: 0 },
       data: { label: `${n.name}${n.startLine ? `:${n.startLine}` : ""}`, nodeType: n.type },
       className: `flow-node${selected ? " sel" : ""}${affected ? " aff" : ""}${dimmed ? " dim" : ""}`,
@@ -97,6 +140,8 @@ function FlowView({
       const impact = affectedIds.has(e.sourceId) && affectedIds.has(e.targetId);
       const hot =
         impact || (selectedId !== null && (e.sourceId === selectedId || e.targetId === selectedId));
+      const dimming = affectedIds.size > 0 || (selectedId !== null && !hot);
+      const marker = impact ? "impact" : hot ? "focus" : dimming ? "faint" : "base";
       return {
         id: e.id,
         source: e.sourceId,
@@ -109,20 +154,10 @@ function FlowView({
         style: {
           stroke: impact ? "var(--orange)" : hot ? "var(--accent)" : "var(--edge)",
           strokeWidth: hot ? 2 : 1,
-          strokeOpacity: hot
-            ? 0.95
-            : affectedIds.size > 0 || selectedId
-              ? 0.16
-              : e.confidence < 1
-                ? 0.6
-                : 0.9,
+          strokeOpacity: hot ? 0.95 : dimming ? 0.16 : e.confidence < 1 ? 0.6 : 0.9,
         },
         animated: hot,
-        // markers render as SVG attributes (no var() resolution) — hex only
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: impact ? "#ff8a3d" : hot ? "#5e8bff" : "#5d6b7f",
-        },
+        markerEnd: `url(#mcpdg-arrow-${marker})`,
       };
     });
 
@@ -132,6 +167,7 @@ function FlowView({
     <ReactFlow
       nodes={flowNodes}
       edges={flowEdges}
+      nodeTypes={NODE_TYPES}
       fitView
       minZoom={0.15}
       colorMode={theme}
@@ -140,6 +176,7 @@ function FlowView({
       onNodeClick={(_, node) => onSelect(node.id)}
       proOptions={{ hideAttribution: true }}
     >
+      <EdgeDefs />
       <Background variant={BackgroundVariant.Dots} gap={18} color="#1e2733" />
       <Controls showInteractive={false} position="bottom-left" />
       <div className="graph-legend" aria-hidden="true">

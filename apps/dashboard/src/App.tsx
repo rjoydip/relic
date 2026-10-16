@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   api,
   type GraphEdgeDto,
@@ -19,6 +19,18 @@ const NODE_TYPES = [
   "test",
   "file",
   "queue",
+];
+
+// curated to carry white button text in both themes
+const ACCENTS = [
+  "#5e8bff",
+  "#8b5cf6",
+  "#ec4899",
+  "#f43f5e",
+  "#f59e0b",
+  "#22c55e",
+  "#14b8a6",
+  "#0ea5e9",
 ];
 
 function passesFilter(n: GraphNodeDto, query: string, typeFilter: string): boolean {
@@ -49,6 +61,7 @@ export function App() {
     localStorage.getItem("mcpdg-theme") === "light" ? "light" : "dark",
   );
   const [accent, setAccent] = useState(() => localStorage.getItem("mcpdg-accent") ?? "");
+  const [accentOpen, setAccentOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -221,14 +234,46 @@ export function App() {
         >
           {theme === "dark" ? "☀" : "☾"}
         </button>
-        <input
-          type="color"
-          className="accent-picker"
-          value={accent || "#5e8bff"}
-          onChange={(e) => setAccent(e.target.value)}
-          title="Accent color"
-          aria-label="Accent color"
-        />
+        <span className="accent-wrap">
+          <button
+            className="swatch-btn"
+            style={{ "--swatch": accent || "#5e8bff" } as CSSProperties}
+            onClick={() => setAccentOpen((o) => !o)}
+            title="Accent color"
+            aria-label="Accent color"
+            aria-haspopup="dialog"
+            aria-expanded={accentOpen}
+          />
+          {accentOpen && (
+            <>
+              <div className="popover-backdrop" onClick={() => setAccentOpen(false)} />
+              <div className="accent-pop" role="group" aria-label="Accent colors">
+                {ACCENTS.map((c) => (
+                  <button
+                    key={c}
+                    className={`swatch${(accent || "#5e8bff").toLowerCase() === c ? " active" : ""}`}
+                    style={{ "--c": c } as CSSProperties}
+                    onClick={() => {
+                      setAccent(c);
+                      setAccentOpen(false);
+                    }}
+                    aria-label={`Accent ${c}`}
+                  />
+                ))}
+                <button
+                  className="swatch reset"
+                  onClick={() => {
+                    setAccent("");
+                    setAccentOpen(false);
+                  }}
+                  title="Reset accent"
+                >
+                  ↺
+                </button>
+              </div>
+            </>
+          )}
+        </span>
         <select
           value={repoId ?? ""}
           onChange={(e) => setRepoId(e.target.value)}
