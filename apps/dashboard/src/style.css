@@ -188,3 +188,14 @@ footer.status {
   font-size: 12px;
   color: #8595a8;
 }
+
+.index-form {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 480px;
+}
+.index-form input {
+  flex: 1;
+  width: auto;
+}

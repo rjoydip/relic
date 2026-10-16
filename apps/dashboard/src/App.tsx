@@ -96,6 +96,25 @@ export function App() {
     }
   }, [repo, busy, loadGraph]);
 
+  const runIndex = useCallback(
+    async (source: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const result = await api.indexSource(source);
+        const list = await api.repositories();
+        setRepositories(list.repositories);
+        setRepoId(result.repositoryId);
+        await loadGraph(result.repositoryId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [loadGraph],
+  );
+
   const selectNode = useCallback(
     (id: string) => {
       const found = nodes.find((n) => n.id === id);
@@ -131,11 +150,10 @@ export function App() {
   if (!repositories.length)
     return (
       <div className="center">
-        <h2>No repositories indexed</h2>
-        <p className="muted">
-          Run the MCP tool <code>index_repository</code> or POST /api/repositories/:id/index to
-          build a graph.
-        </p>
+        <h2>Index a repository</h2>
+        <p className="muted">Enter a local path or a GitHub URL to build the graph.</p>
+        <IndexForm busy={busy} onIndex={runIndex} />
+        {error && <div className="error">{error}</div>}
       </div>
     );
 
@@ -158,6 +176,7 @@ export function App() {
         <button onClick={() => void reindex()} disabled={busy}>
           {busy ? "Working…" : "Re-index"}
         </button>
+        <IndexForm busy={busy} onIndex={runIndex} />
       </header>
 
       <main>
@@ -276,5 +295,34 @@ export function App() {
         )}
       </footer>
     </div>
+  );
+}
+
+function IndexForm({
+  busy,
+  onIndex,
+}: {
+  busy: boolean;
+  onIndex: (source: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState("");
+  return (
+    <form
+      className="index-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (value.trim()) void onIndex(value.trim());
+      }}
+    >
+      <input
+        placeholder="Path or GitHub URL…"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        aria-label="Repository source"
+      />
+      <button type="submit" disabled={busy || !value.trim()}>
+        {busy ? "Indexing…" : "Index"}
+      </button>
+    </form>
   );
 }

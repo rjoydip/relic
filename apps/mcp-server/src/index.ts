@@ -2,12 +2,13 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { openGraph } from "@mcpdg/indexer";
+import { openGraph, type OpenGraph } from "@mcpdg/indexer";
 import { registerTools } from "./tools";
 
 /** Wire a configured MCP server (used by main and protocol tests). */
 export function createMcpServer(options: { dbPath?: string } = {}): {
   server: McpServer;
+  graph: OpenGraph;
   close: () => void;
 } {
   const dbPath = options.dbPath ?? process.env.MCP_GRAPH_DB ?? join(tmpdir(), "mcpdg-graph.db");
@@ -18,11 +19,20 @@ export function createMcpServer(options: { dbPath?: string } = {}): {
     indexer: graph.indexer,
     repository: graph.repository,
   });
-  return { server, close: graph.close };
+  return { server, graph, close: graph.close };
 }
 
 export async function main(): Promise<void> {
-  const { server } = createMcpServer();
+  const { server, graph } = createMcpServer();
+  // Auto-index the launch directory (or an explicit project) so tools answer
+  // immediately; failures degrade to the index_repository tool.
+  const root = process.env.MCP_GRAPH_ROOT ?? process.env.MCP_GRAPH_REPOSITORY ?? process.cwd();
+  try {
+    const result = graph.indexer.index(root);
+    console.error(`auto-indexed ${root}: ${result.nodeCount} nodes, ${result.edgeCount} edges`);
+  } catch (err) {
+    console.error(`auto-index skipped for ${root}:`, err instanceof Error ? err.message : err);
+  }
   const transport = new StdioServerTransport();
   // stdout is reserved for protocol messages; logs go to stderr.
   console.error("mcp-dependency-graph server running on stdio");

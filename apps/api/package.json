@@ -1,6 +1,9 @@
 {
   "name": "@mcpdg/api",
   "version": "0.1.0",
+  "bin": {
+    "mcpdg": "./src/cli.ts"
+  },
   "type": "module",
   "main": "src/index.ts",
   "dependencies": {

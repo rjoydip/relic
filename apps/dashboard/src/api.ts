@@ -97,6 +97,12 @@ export const api = {
     request<{ tests: GraphNodeDto[] }>(
       `/tests/related?repository=${encodeURIComponent(repo)}&symbol=${encodeURIComponent(symbol)}`,
     ),
+  indexSource: (source: string) =>
+    request<{ repositoryId: string; nodeCount: number; edgeCount: number }>("/index", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source }),
+    }),
   reindex: (id: string, root: string) =>
     request<{ analyzedFiles: number; nodeCount: number; edgeCount: number }>(
       `/repositories/${encodeURIComponent(id)}/index`,

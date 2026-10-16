@@ -27,7 +27,7 @@ tests/
 bun install
 bun run typecheck   # tsc (3 projects)
 bun run lint        # oxlint --deny-warnings
-bun run test        # bun test (53 tests)
+bun run test        # bun test
 bun run build       # tsc + vite build apps/dashboard
 bun run ci          # format:check && lint && typecheck && test:coverage && build
 ```
@@ -37,6 +37,8 @@ bun run ci          # format:check && lint && typecheck && test:coverage && buil
 ```sh
 MCP_GRAPH_REPOSITORY=/absolute/path/to/repo bun run apps/mcp-server/src/index.ts
 ```
+
+On startup the server auto-indexes `MCP_GRAPH_ROOT` (or `MCP_GRAPH_REPOSITORY`, or the launch directory), so tools answer immediately; `index_repository` stays available for other projects.
 
 Tools: `index_repository`, `search_symbols`, `get_symbol_details`, `find_dependents`, `find_dependencies`, `analyze_impact`, `get_dependency_path`, `find_related_tests`, `analyze_git_diff`, `get_graph_summary`.
 
@@ -54,7 +56,7 @@ Example client config (Claude Code / Cursor / Cline / Windsurf all use the same 
 }
 ```
 
-Optional env: `MCP_GRAPH_DB` (graph SQLite path, default `~/.mcpdg/graph.db`).
+Optional env: `MCP_GRAPH_ROOT` (project to auto-index at startup), `MCP_GRAPH_DB` (graph SQLite path, default `$TMPDIR/mcpdg-graph.db`).
 
 Ask things like:
 
@@ -63,6 +65,24 @@ Ask things like:
 - "Explain the dependency path from `routes.ts` to `UserRepository.update`."
 
 ## API + dashboard
+
+One-time setup so `mcpdg` lands on your PATH:
+
+```sh
+cd apps/api && bun link
+```
+
+Then:
+
+```sh
+mcpdg                          # index cwd, serve API + UI, open the browser
+mcpdg /path/to/repo            # index a specific project
+mcpdg --port 9000 --no-open    # options: --port, --db, --no-open
+```
+
+The dashboard's index bar (empty state and header) accepts a local path or a GitHub URL — GitHub sources are shallow-cloned into a temp dir (re-pulled on re-index) and never run code.
+
+Dev mode with HMR:
 
 ```sh
 bun run dev:api                          # http://127.0.0.1:8787

@@ -1,4 +1,8 @@
-import { resolve, sep } from "node:path";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve, sep } from "node:path";
 import { Hono } from "hono";
 import { GraphError } from "@mcpdg/graph-core";
 import type { EdgeType, NodeType } from "@mcpdg/graph-core";
@@ -16,6 +20,37 @@ function limitOf(raw: string | undefined, fallback = 50): number {
   const value = Number(raw ?? fallback);
   if (!Number.isFinite(value) || value < 1) return fallback;
   return Math.min(Math.floor(value), MAX_LIMIT);
+}
+
+const GITHUB_URL = /^https:\/\/github\.com\/([\w-][\w.-]*)\/([\w-][\w.-]*?)(?:\.git)?\/?$/;
+
+/** Normalizes accepted GitHub URLs; anything else returns null (treated as a local path). */
+export function parseGitHubUrl(raw: string): string | null {
+  const match = GITHUB_URL.exec(raw.trim());
+  return match ? `https://github.com/${match[1]}/${match[2]}` : null;
+}
+
+/** Shallow-clones into a stable temp dir so re-indexing the same URL updates in place. */
+function ensureGitHubClone(url: string): string {
+  const dir = join(
+    tmpdir(),
+    "mcpdg-github",
+    createHash("sha1").update(url).digest("hex").slice(0, 12),
+  );
+  if (!existsSync(dir)) {
+    mkdirSync(dirname(dir), { recursive: true });
+    execFileSync("git", ["clone", "--depth", "1", "--single-branch", url, dir], {
+      stdio: "pipe",
+      timeout: 120_000,
+    });
+  } else {
+    try {
+      execFileSync("git", ["pull", "--ff-only"], { cwd: dir, stdio: "pipe", timeout: 60_000 });
+    } catch {
+      // offline or diverged: index the existing checkout
+    }
+  }
+  return dir;
 }
 
 export function buildApp(options: ApiOptions): Hono & { graph: OpenGraph } {
@@ -88,6 +123,30 @@ export function buildApp(options: ApiOptions): Hono & { graph: OpenGraph } {
       const root = body.root ?? meta?.rootPath;
       if (!root) throw new GraphError("INVALID_INPUT", "repository root is required for indexing");
       assertAllowed(resolve(root));
+      return c.json(store.indexer.index(root));
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  // Index any local path or GitHub URL; powers the dashboard's index form.
+  app.post("/api/index", async (c) => {
+    try {
+      const body = await c.req.json<{ source?: string }>();
+      const source = body.source?.trim();
+      if (!source) throw new GraphError("INVALID_INPUT", "source is required");
+      const github = parseGitHubUrl(source);
+      let root: string;
+      if (github) {
+        // ponytail: shallow clone into temp with no size cap; add caps before
+        // exposing this endpoint beyond localhost.
+        if ((options.allowedRoots ?? []).length > 0)
+          throw new GraphError("PATH_ESCAPE", "GitHub sources are outside allowedRoots");
+        root = ensureGitHubClone(github);
+      } else {
+        root = resolve(source);
+        assertAllowed(root);
+      }
       return c.json(store.indexer.index(root));
     } catch (err) {
       return fail(c, err);

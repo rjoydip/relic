@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { repositoryIdFor } from "@mcpdg/indexer";
-import { buildApp } from "../../apps/api/src/app";
+import { buildApp, parseGitHubUrl } from "../../apps/api/src/app";
 import { cleanup, copyFixture, FIXTURE_ROOT, json, tempDir } from "../helpers";
 
 let fixture: { root: string; cleanup: () => void };
@@ -194,6 +194,64 @@ describe("dashboard API — allowed roots", () => {
     expect(outside.status).toBe(400);
     const body = await json<{ error: string }>(outside);
     expect(body.error).toBe("PATH_ESCAPE");
+    scoped.graph.close();
+  });
+});
+
+describe("index source (paths and GitHub URLs)", () => {
+  it("accepts GitHub URLs and rejects lookalikes", () => {
+    expect(parseGitHubUrl("https://github.com/acme/widgets")).toBe(
+      "https://github.com/acme/widgets",
+    );
+    expect(parseGitHubUrl(" https://github.com/acme/widgets.git/ ")).toBe(
+      "https://github.com/acme/widgets",
+    );
+    expect(parseGitHubUrl("http://github.com/acme/widgets")).toBeNull();
+    expect(parseGitHubUrl("https://gitlab.com/acme/widgets")).toBeNull();
+    expect(parseGitHubUrl("git@github.com:acme/widgets.git")).toBeNull();
+    expect(parseGitHubUrl("https://github.com/acme/../widgets")).toBeNull();
+    expect(parseGitHubUrl("https://evil.com/github.com/acme/widgets")).toBeNull();
+  });
+
+  it("indexes a local path through POST /api/index", async () => {
+    const res = await app.request("/api/index", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: fixture.root }),
+    });
+    expect(res.status).toBe(200);
+    const result = await json<{ repositoryId: string; nodeCount: number; analyzedFiles: number }>(
+      res,
+    );
+    expect(result.repositoryId).toBe(repoId);
+    expect(result.nodeCount).toBeGreaterThan(15);
+  });
+
+  it("validates sources and enforces allowed roots", async () => {
+    const empty = await app.request("/api/index", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(empty.status).toBe(400);
+    expect((await json<{ error: string }>(empty)).error).toBe("INVALID_INPUT");
+
+    const scoped = buildApp({ dbPath: join(tempDir(), "scoped.db"), allowedRoots: [FIXTURE_ROOT] });
+    const outside = await scoped.request("/api/index", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: "C:\\windows\\system32" }),
+    });
+    expect(outside.status).toBe(400);
+    expect((await json<{ error: string }>(outside)).error).toBe("PATH_ESCAPE");
+
+    const github = await scoped.request("/api/index", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: "https://github.com/acme/widgets" }),
+    });
+    expect(github.status).toBe(400);
+    expect((await json<{ error: string }>(github)).error).toBe("PATH_ESCAPE");
     scoped.graph.close();
   });
 });
