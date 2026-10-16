@@ -3,7 +3,6 @@ import {
   BackgroundVariant,
   Controls,
   MarkerType,
-  MiniMap,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -144,16 +143,6 @@ function FlowView({ nodes, edges, affectedIds, selectedId, onSelect }: GraphCanv
     >
       <Background variant={BackgroundVariant.Dots} gap={18} color="#1e2733" />
       <Controls showInteractive={false} position="bottom-left" />
-      <MiniMap
-        pannable
-        zoomable
-        position="bottom-right"
-        style={{ width: 180, height: 130 }}
-        bgColor="#0d1117"
-        maskColor="rgba(8,10,14,0.72)"
-        nodeStrokeWidth={0}
-        nodeColor={(n) => COLOR[(n.data as FlowData).nodeType] ?? "#5d6b7f"}
-      />
       <div className="graph-legend" aria-hidden="true">
         {Object.keys(COLOR)
           .filter((t) => presentTypes.has(t))

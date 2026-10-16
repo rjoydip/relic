@@ -524,14 +524,13 @@ header .index-form {
 }
 .graph-legend {
   position: absolute;
-  right: 10px;
-  bottom: 150px;
+  top: 10px;
+  left: 10px;
   z-index: 5;
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 4px 12px;
-  max-width: 200px;
+  max-width: min(440px, calc(100% - 24px));
   padding: 7px 11px;
   background: rgba(13, 17, 23, 0.85);
   backdrop-filter: blur(8px);
@@ -637,17 +636,6 @@ header .index-form {
   }
   .center {
     min-height: 50vh;
-  }
-  .react-flow__minimap {
-    display: none;
-  }
-  .graph-legend {
-    top: 10px;
-    right: auto;
-    bottom: auto;
-    left: 10px;
-    max-width: calc(100% - 24px);
-    justify-content: flex-start;
   }
   input,
   select {
