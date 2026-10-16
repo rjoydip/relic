@@ -62,7 +62,9 @@ export function NodeInspector({ repoId, node, onSelect, onAnalyzeImpact }: Inspe
       <h2>{node.qualifiedName ?? node.name}</h2>
       <dl className="facts">
         <dt>Type</dt>
-        <dd>{node.type}</dd>
+        <dd>
+          <span className={`pill t-${node.type}`}>{node.type}</span>
+        </dd>
         {node.filePath && (
           <>
             <dt>Source</dt>

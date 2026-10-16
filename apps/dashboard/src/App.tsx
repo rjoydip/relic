@@ -150,17 +150,19 @@ export function App() {
   if (!repositories.length)
     return (
       <div className="center">
-        <h2>Index a repository</h2>
-        <p className="muted">Enter a local path or a GitHub URL to build the graph.</p>
-        <IndexForm busy={busy} onIndex={runIndex} />
-        {error && <div className="error">{error}</div>}
+        <div className="hero">
+          <h2>Index a repository</h2>
+          <p className="muted">Enter a local path or a GitHub URL to build the graph.</p>
+          <IndexForm busy={busy} onIndex={runIndex} />
+          {error && <div className="error">{error}</div>}
+        </div>
       </div>
     );
 
   return (
     <div className="app">
       <header>
-        <strong>MCP Dependency Graph</strong>
+        <strong className="brand">MCP Dependency Graph</strong>
         <select
           value={repoId ?? ""}
           onChange={(e) => setRepoId(e.target.value)}
@@ -226,9 +228,9 @@ export function App() {
                     <button className="link" onClick={() => selectNode(a.node.id)}>
                       {a.node.name}
                     </button>
+                    <span className="pill">{a.relationship}</span>
                     <span className="muted mono">
-                      {" "}
-                      {a.relationship} d{a.depth} c{a.confidence.toFixed(1)}
+                      d{a.depth} · c{a.confidence.toFixed(1)}
                     </span>
                   </li>
                 ))}
@@ -242,7 +244,7 @@ export function App() {
                 <button className="link" onClick={() => selectNode(n.id)}>
                   {n.name}
                 </button>
-                <span className="muted"> {n.type}</span>
+                <span className={`pill t-${n.type}`}>{n.type}</span>
               </li>
             ))}
           </ul>
