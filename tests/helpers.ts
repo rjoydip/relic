@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,15 +12,22 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const PROJECT_ROOT = join(here, "..");
 export const FIXTURE_ROOT = join(here, "fixtures", "starter-hono");
 
-export function tempDir(prefix = "mcpdg-"): string {
-  return mkdtempSync(join(tmpdir(), prefix));
+// ponytail: bun's node:sqlite releases file handles on a later event-loop
+// turn, and Windows blocks rm until then — occasionally longer than any sane
+// per-test wait (it raced bun's 5s hook timeout). All test scratch lives
+// under one fixed root instead: deletes are best-effort, and the root is
+// swept once at suite startup, when the previous process's handles are gone.
+// Upgrade path = per-process subdirs if tests ever run concurrently.
+const SCRATCH_ROOT = join(tmpdir(), "mcpdg-test");
+try {
+  rmSync(SCRATCH_ROOT, { recursive: true, force: true });
+} catch {
+  // best-effort: a locked leftover is swept on the next run
 }
 
-export function makeTempFile(name: string, content: string): string {
-  const dir = tempDir();
-  const path = join(dir, name);
-  writeFileSync(path, content);
-  return path;
+export function tempDir(prefix = "mcpdg-"): string {
+  mkdirSync(SCRATCH_ROOT, { recursive: true });
+  return mkdtempSync(join(SCRATCH_ROOT, prefix));
 }
 
 /** Copy the fixture into a temp dir so mutation tests never touch sources. */
@@ -34,19 +41,18 @@ export function copyFixture(): { root: string; cleanup: () => void } {
   };
 }
 
+/**
+ * Best-effort removal: a few quick pumps for the common case, then leave
+ * locked leftovers for the startup sweep. Never blocks a hook past ~0.5s.
+ */
 export async function cleanup(paths: string[]): Promise<void> {
   for (const path of paths) {
-    // ponytail: bun's node:sqlite releases file handles on a later event-loop
-    // turn (wall-clock waiting never works), and Windows blocks rm until then.
-    // Retry while pumping the loop; upgrade path = per-test fixed DB location
-    // + sweep on startup if a slow CI machine outlives the 5s ceiling.
-    for (let attempt = 0; attempt < 50; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       try {
         rmSync(path, { recursive: true, force: true });
         break;
-      } catch (err) {
-        if (attempt === 49) throw err;
-        await new Promise((resolve) => setTimeout(resolve, 100));
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
     }
   }

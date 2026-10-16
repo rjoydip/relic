@@ -151,4 +151,106 @@ describe("relationship resolution (pass 2)", () => {
       true,
     );
   });
+
+  it("resolves identifier handlers to local declarations, imports, or a diagnostic", () => {
+    const service = extractFile(repo, "src/services/user.ts");
+    const decl = service.declarations.find((d) => d.qualifiedName === "UserService.updateUser")!;
+    service.handlers.push(
+      { containerId: "route-local", ref: { kind: "identifier", name: "updateUser" }, line: 1 },
+      {
+        containerId: "route-missing",
+        ref: { kind: "identifier", name: "missingHandler" },
+        line: 2,
+      },
+    );
+    const local = relate(repo, service, lookup);
+    expect(
+      local.edges.some((e) => e.type === "EXPOSES" && e.targetId === decl.id && e.confidence === 1),
+    ).toBe(true);
+    expect(
+      local.diagnostics.some(
+        (d) => d.kind === "unresolved" && d.message.includes("missingHandler"),
+      ),
+    ).toBe(true);
+
+    const routes = extractFile(repo, "src/routes.ts");
+    routes.handlers.push({
+      containerId: "route-binding",
+      ref: { kind: "identifier", name: "userController" },
+      line: 1,
+    });
+    const bound = relate(repo, routes, lookup);
+    const controllerDecl = files
+      .find((f) => f.filePath === "src/controllers/user.ts")!
+      .declarations.find((d) => d.qualifiedName === "userController")!;
+    expect(bound.edges.some((e) => e.type === "EXPOSES" && e.targetId === controllerDecl.id)).toBe(
+      true,
+    );
+  });
+
+  it("resolves local property handlers and reports unresolvable ones", () => {
+    const service = extractFile(repo, "src/services/user.ts");
+    const decl = service.declarations.find((d) => d.qualifiedName === "UserService.updateUser")!;
+    service.handlers.push({
+      containerId: "route-local-prop",
+      ref: { kind: "property", exprName: "notImported", propName: "updateUser" },
+      line: 1,
+    });
+    const local = relate(repo, service, lookup);
+    expect(local.edges.some((e) => e.type === "EXPOSES" && e.targetId === decl.id)).toBe(true);
+
+    const routes = extractFile(repo, "src/routes.ts");
+    routes.handlers.push({
+      containerId: "route-broken",
+      ref: { kind: "property", exprName: "userController", propName: "doesNotExist" },
+      line: 1,
+    });
+    const broken = relate(repo, routes, lookup);
+    expect(
+      broken.diagnostics.some(
+        (d) => d.kind === "unresolved" && d.message.includes("userController.doesNotExist"),
+      ),
+    ).toBe(true);
+  });
+
+  it("reports property calls that cannot be resolved in the imported file", () => {
+    const service = extractFile(repo, "src/services/user.ts");
+    service.imports.push({
+      localName: "ghostController",
+      targetFile: "src/controllers/user.ts",
+      exportName: "userController",
+    });
+    service.calls.push({
+      sourceId: service.declarations[0]!.id,
+      line: 1,
+      kind: "property",
+      exprName: "ghostController",
+      propName: "doesNotExist",
+    });
+    const { diagnostics } = relate(repo, service, lookup);
+    expect(
+      diagnostics.some(
+        (d) => d.kind === "unresolved" && d.message.includes("ghostController.doesNotExist"),
+      ),
+    ).toBe(true);
+  });
+
+  it("emits a computed route edge and diagnostic when the endpoint is not indexed", () => {
+    const fe = extractFile(repo, "src/frontend/mutations.ts");
+    fe.frontend.push({
+      nodeId: "operation-unknown",
+      method: "GET",
+      path: "/definitely-not-routed",
+      line: 1,
+    });
+    const { edges, diagnostics } = relate(repo, fe, lookup);
+    expect(
+      edges.some((e) => e.type === "USES_OPERATION" && e.sourceId === "operation-unknown"),
+    ).toBe(true);
+    expect(
+      diagnostics.some(
+        (d) => d.kind === "unresolved" && d.message === "No route for GET /definitely-not-routed",
+      ),
+    ).toBe(true);
+  });
 });

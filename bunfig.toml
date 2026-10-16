@@ -2,6 +2,5 @@
 # Fixture repo is analyzed, never executed as part of our suite.
 pathIgnorePatterns = ["tests/fixtures"]
 # Bun enforces these PER FILE as fractions (0-1), not as aggregate percents.
-# Current worst files: resolve.ts ~0.79 funcs / ~0.76 lines; suite aggregate ~0.95/0.96.
-# ponytail: ratchet toward 0.85 once resolve.ts and discovery.ts gaps are covered.
-coverageThreshold = { functions = 0.7, lines = 0.7 }
+# Current worst files: ids.ts 0.90 funcs / extract.ts 0.92 lines; suite aggregate ~0.98/0.99.
+coverageThreshold = { functions = 0.85, lines = 0.85 }

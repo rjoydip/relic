@@ -49,16 +49,8 @@ export function relate(
   const localDecls = extracted.declarations;
 
   const findExact = (name: string, targetFile: string | null): RefInfo | null => {
-    if (targetFile === filePath) {
-      const local = localDecls.find((d) => d.simpleName === name);
-      if (local)
-        return {
-          id: local.id,
-          name: local.simpleName,
-          qualifiedName: local.qualifiedName,
-          filePath,
-        };
-    }
+    // Callers resolve same-file names via localDecls before reaching here;
+    // only cross-file refs matter below.
     const candidates = lookup.findByName(name).filter((r) => r.filePath === targetFile);
     return candidates.find((r) => r.name === name) ?? candidates[0] ?? null;
   };

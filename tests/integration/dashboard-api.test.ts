@@ -140,6 +140,44 @@ describe("dashboard API", () => {
     expect(bad.status).toBe(400);
     expect((await json<{ error: string }>(bad)).error).toBe("INVALID_INPUT");
   });
+
+  it("maps guarded-route lookups to stable 404s", async () => {
+    const edges = await app.request("/api/graph/edges?repository=not-a-repo");
+    expect(edges.status).toBe(404);
+    expect((await json<{ error: string }>(edges)).error).toBe("REPOSITORY_NOT_FOUND");
+
+    const hood = await app.request("/api/graph/nodes/does-not-exist/neighborhood");
+    expect(hood.status).toBe(404);
+    expect((await json<{ error: string }>(hood)).error).toBe("NODE_NOT_FOUND");
+
+    const status = await app.request("/api/index-status?repository=not-a-repo");
+    expect(status.status).toBe(404);
+    expect((await json<{ error: string }>(status)).error).toBe("REPOSITORY_NOT_FOUND");
+  });
+
+  it("rejects rootless indexing, unknown related-test symbols, and ambiguous symbols", async () => {
+    const noRoot = await app.request("/api/repositories/not-indexed/index", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(noRoot.status).toBe(400);
+    expect((await json<{ error: string }>(noRoot)).error).toBe("INVALID_INPUT");
+
+    const related = await app.request(`/api/tests/related?repository=${repoId}&symbol=NoSuchThing`);
+    expect(related.status).toBe(400);
+    expect((await json<{ error: string }>(related)).error).toBe("INVALID_INPUT");
+
+    const ambiguous = await app.request("/api/impact", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ repository: repoId, symbol: "User" }),
+    });
+    expect(ambiguous.status).toBe(400);
+    const body = await json<{ error: string; message: string }>(ambiguous);
+    expect(body.error).toBe("INVALID_INPUT");
+    expect(body.message).toContain("Ambiguous symbol: User");
+  });
 });
 
 describe("dashboard API — allowed roots", () => {

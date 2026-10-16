@@ -68,12 +68,7 @@ export function toRepoRelative(rootPath: string, absolutePath: string): string {
   return rel.split(sep).join("/");
 }
 
-export function walkRepository(rootPath: string, filePaths?: string[]): string[] {
-  if (filePaths) {
-    return filePaths
-      .map((p) => toRepoRelative(rootPath, p))
-      .filter((rel) => SUPPORTED_EXTENSIONS.has(extOf(rel)) && existsSync(join(rootPath, rel)));
-  }
+export function walkRepository(rootPath: string): string[] {
   const out: string[] = [];
   const visit = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
