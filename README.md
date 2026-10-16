@@ -78,7 +78,12 @@ Then:
 mcpdg                          # index cwd, serve API + UI, open the browser
 mcpdg /path/to/repo            # index a specific project
 mcpdg --port 9000 --no-open    # options: --port, --db, --no-open
+mcpdg index /path/to/repo      # one-shot for agents/scripts: index, print
+                               # IndexResult JSON on stdout, exit non-zero on
+                               # failure (logs go to stderr)
 ```
+
+The MCP server is the primary agent interface; `mcpdg index` gives agents and CI a headless way to bootstrap the same graph DB the dashboard and API read.
 
 The dashboard's index bar (empty state and header) accepts a local path or a GitHub URL — GitHub sources are shallow-cloned into a temp dir (re-pulled on re-index) and never run code.
 
