@@ -5,17 +5,10 @@ interface InspectorProps {
   repoId: string;
   node: GraphNodeDto | null;
   onSelect: (id: string) => void;
-  onAnalyzeImpact: (symbol: string) => void;
   onCollapse: () => void;
 }
 
-export function NodeInspector({
-  repoId,
-  node,
-  onSelect,
-  onAnalyzeImpact,
-  onCollapse,
-}: InspectorProps) {
+export function NodeInspector({ repoId, node, onSelect, onCollapse }: InspectorProps) {
   const [steps, setSteps] = useState<EvidenceStep[]>([]);
   const [tests, setTests] = useState<GraphNodeDto[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -93,12 +86,6 @@ export function NodeInspector({
           </>
         )}
       </dl>
-
-      <div className="actions">
-        <button onClick={() => onAnalyzeImpact(node.qualifiedName ?? node.name)}>
-          Analyze impact
-        </button>
-      </div>
 
       {error && <p className="error">{error}</p>}
 

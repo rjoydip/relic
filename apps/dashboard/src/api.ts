@@ -33,23 +33,6 @@ export interface EvidenceStep {
   node: GraphNodeDto;
 }
 
-export interface ImpactDto {
-  target: GraphNodeDto;
-  affected: Array<{
-    node: GraphNodeDto;
-    relationship: string;
-    depth: number;
-    confidence: number;
-    evidence: { source: string; file?: string; line?: number; note?: string };
-  }>;
-  summary: {
-    affectedSymbols: number;
-    affectedTests: number;
-    unresolvedRelationships: number;
-    maxDepth: number;
-  };
-}
-
 export interface IndexStatusDto {
   lastRevision: string | null;
   indexedAt: string | null;
@@ -87,12 +70,6 @@ export const api = {
     request<{ nodes: GraphNodeDto[]; steps: EvidenceStep[] }>(
       `/graph/nodes/${encodeURIComponent(id)}/neighborhood?depth=1&limit=200`,
     ),
-  impact: (repo: string, symbol: string, maxDepth: number) =>
-    request<ImpactDto>("/impact", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ repository: repo, symbol, maxDepth, includeTests: true }),
-    }),
   relatedTests: (repo: string, symbol: string) =>
     request<{ tests: GraphNodeDto[] }>(
       `/tests/related?repository=${encodeURIComponent(repo)}&symbol=${encodeURIComponent(symbol)}`,

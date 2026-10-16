@@ -14,7 +14,6 @@
   --accent-hover: color-mix(in srgb, var(--accent) 78%, #ffffff);
   --accent-glow: color-mix(in srgb, var(--accent) 32%, transparent);
   --amber: #f0b429;
-  --orange: #ff8a3d;
   --green: #3fb950;
   --red: #f47067;
   --radius: 8px;
@@ -43,7 +42,6 @@
   --dim: #55637a;
   --faint: #8592a6;
   --amber: #b45309;
-  --orange: #dd6610;
   --green: #1a8f42;
   --red: #d64545;
   --shadow: 0 1px 2px rgba(20, 35, 70, 0.08);
@@ -173,6 +171,20 @@ header .mono {
   flex-shrink: 0;
   color: var(--accent);
   margin-right: 6px;
+}
+.path-chip .seg {
+  white-space: nowrap;
+}
+.path-chip .seg + .seg::before {
+  content: "/";
+  margin: 0 4px;
+  opacity: 0.5;
+}
+.path-chip .seg.end {
+  color: var(--text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .header-actions {
   margin-left: auto;
@@ -359,10 +371,6 @@ button.link:hover {
   color: var(--accent-hover);
   text-decoration: none;
 }
-.actions {
-  display: flex;
-  gap: 8px;
-}
 
 .pill {
   display: inline-flex;
@@ -448,13 +456,6 @@ button.link:hover {
   display: block;
   flex: 1;
   min-height: 180px;
-}
-.impact-summary {
-  margin: 0;
-}
-.impact-tree {
-  flex: none;
-  max-height: 32vh;
 }
 .node-list {
   list-style: none;
@@ -811,12 +812,6 @@ header .index-form {
     0 0 0 1px var(--node-accent, var(--accent)),
     0 4px 18px rgba(0, 0, 0, 0.45);
 }
-.flow-node.aff {
-  border-color: var(--orange);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--orange) 32%, transparent),
-    var(--shadow);
-}
 .flow-node.dim {
   opacity: 0.25;
 }
@@ -847,35 +842,6 @@ header .index-form {
 .react-flow__edge-text {
   fill: var(--dim);
   font-size: 10px;
-}
-.graph-legend {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 5;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  max-width: min(440px, calc(100% - 24px));
-  padding: 7px 11px;
-  background: color-mix(in srgb, var(--panel) 85%, transparent);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-2);
-  border-radius: var(--radius);
-  font-size: 10.5px;
-  color: var(--dim);
-  pointer-events: none;
-}
-.graph-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-.graph-legend i {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
 }
 
 /* Small laptops / tablets: inspector drops below the canvas */

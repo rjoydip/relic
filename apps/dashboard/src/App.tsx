@@ -4,7 +4,6 @@ import {
   api,
   type GraphEdgeDto,
   type GraphNodeDto,
-  type ImpactDto,
   type IndexStatusDto,
   type Repository,
 } from "./api";
@@ -61,12 +60,10 @@ export function App() {
   const [nodes, setNodes] = useState<GraphNodeDto[]>([]);
   const [edges, setEdges] = useState<GraphEdgeDto[]>([]);
   const [selected, setSelected] = useState<GraphNodeDto | null>(null);
-  const [impact, setImpact] = useState<ImpactDto | null>(null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [explorerView, setExplorerView] = useState<"tree" | "flat">(() =>
     localStorage.getItem("mcpdg-explorer") === "flat" ? "flat" : "tree",
@@ -78,8 +75,6 @@ export function App() {
   );
   const [accent, setAccent] = useState(() => localStorage.getItem("mcpdg-accent") ?? "");
   const [accentOpen, setAccentOpen] = useState(false);
-  // impact responses may land out of order — only the newest request wins
-  const impactSeq = useRef(0);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -107,12 +102,10 @@ export function App() {
   const showInspector = inspectorOpen && selected !== null;
   const showPeek = !inspectorOpen && selected !== null;
 
-  // Switching repositories invalidates selection, impact and filters —
+  // Switching repositories invalidates selection and filters —
   // without this reset the old repo's state makes a fresh index look stale.
   useEffect(() => {
     setSelected(null);
-    setImpact(null);
-    impactSeq.current += 1;
     setQuery("");
     setTypeFilter("");
     setError(null);
@@ -143,39 +136,8 @@ export function App() {
       .finally(() => setLoading(false));
   }, [loadGraph]);
 
-  // impact analysis runs automatically on node selection (no manual input);
-  // only nodes carrying a qualifiedName can be looked up, the rest just
-  // clear the results
-  const analyzeImpact = useCallback(
-    async (symbol: string) => {
-      if (!repoId || !symbol.trim()) return;
-      const seq = ++impactSeq.current;
-      setAnalyzing(true);
-      setError(null);
-      try {
-        const result = await api.impact(repoId, symbol.trim(), 5);
-        if (seq !== impactSeq.current) return;
-        setImpact(result);
-        setSelected(result.target);
-      } catch (err) {
-        if (seq !== impactSeq.current) return;
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (seq === impactSeq.current) setAnalyzing(false);
-      }
-    },
-    [repoId],
-  );
-
-  const clearImpact = useCallback(() => {
-    impactSeq.current += 1;
-    setImpact(null);
-    setAnalyzing(false);
-  }, []);
-
   // switching repositories loads the new graph under a canvas overlay — the
-  // index/re-index buttons must not light up ("Working…") for an impact
-  // analysis or a repo switch, so each action owns its own busy flag
+  // index/re-index buttons must not light up for a repo switch
   const switchRepo = useCallback(
     (id: string) => {
       setRepoId(id);
@@ -230,26 +192,14 @@ export function App() {
         setTypeFilter("");
       }
       setInspectorOpen(true);
-      if (found) {
-        setSelected(found);
-        if (found.qualifiedName) void analyzeImpact(found.qualifiedName);
-        else clearImpact();
-      } else
+      if (found) setSelected(found);
+      else
         void api
           .node(id)
-          .then((n) => {
-            setSelected(n);
-            if (n.qualifiedName) void analyzeImpact(n.qualifiedName);
-            else clearImpact();
-          })
+          .then(setSelected)
           .catch(() => setSelected(null));
     },
-    [nodes, query, typeFilter, analyzeImpact, clearImpact],
-  );
-
-  const affectedIds = useMemo(
-    () => new Set((impact?.affected ?? []).map((a) => a.node.id)),
-    [impact],
+    [nodes, query, typeFilter],
   );
 
   const visibleNodes = useMemo(
@@ -258,28 +208,11 @@ export function App() {
   );
 
   const explorerTree = useMemo(() => buildTree(visibleNodes), [visibleNodes]);
-  // impact results as a tree: one folder per relationship, leaves tagged
-  // with their depth
-  const impactTree = useMemo(() => {
-    if (!impact)
-      return { paths: [] as string[], dirs: [] as string[], map: new Map<string, GraphNodeDto>() };
-    const paths: string[] = [];
-    const map = new Map<string, GraphNodeDto>();
-    for (const a of impact.affected) {
-      const path = `${a.relationship}/${a.node.name} · d${a.depth}`;
-      if (!map.has(path)) {
-        map.set(path, a.node);
-        paths.push(path);
-      }
-    }
-    const dirs = [...new Set(paths.map((p) => p.slice(0, p.indexOf("/"))))];
-    return { paths, dirs, map };
-  }, [impact]);
 
   // tree models are created once, so their handlers read the current maps
   // and selection logic through a ref instead of a stale closure
-  const nav = useRef({ select: selectNode, explorer: explorerTree.map, impact: impactTree.map });
-  nav.current = { select: selectNode, explorer: explorerTree.map, impact: impactTree.map };
+  const nav = useRef({ select: selectNode, explorer: explorerTree.map });
+  nav.current = { select: selectNode, explorer: explorerTree.map };
 
   const explorer = useFileTree({
     paths: explorerTree.paths,
@@ -290,17 +223,8 @@ export function App() {
       if (node) nav.current.select(node.id);
     },
   });
-  const impactModel = useFileTree({
-    paths: impactTree.paths,
-    initialExpansion: "open",
-    icons: TREE_ICONS,
-    onSelectionChange: (selected) => {
-      const node = nav.current.impact.get(selected.at(-1) ?? "");
-      if (node) nav.current.select(node.id);
-    },
-  }).model;
 
-  // keep the models in sync with the data; a search expands the ancestors of
+  // keep the model in sync with the data; a search expands the ancestors of
   // every match so results are actually visible
   useEffect(() => {
     explorer.model.resetPaths(
@@ -308,9 +232,6 @@ export function App() {
       query ? { initialExpandedPaths: ancestorsOf(explorerTree.paths) } : undefined,
     );
   }, [explorer.model, explorerTree, query]);
-  useEffect(() => {
-    impactModel.resetPaths(impactTree.paths, { initialExpandedPaths: impactTree.dirs });
-  }, [impactModel, impactTree]);
 
   if (loading)
     return (
@@ -355,7 +276,18 @@ export function App() {
               strokeLinejoin="round"
             />
           </svg>
-          {repo?.name ?? ""}
+          {/* breadcrumb: full path in faded segments, the repo folder (the
+              app name) emphasised; GitHub clones stage into a hashed temp
+              dir — that segment never shows */}
+          {(repo?.rootPath ?? "")
+            .split(/[\\/]+/)
+            .filter(Boolean)
+            .filter((seg) => !/^[0-9a-f]{8,}$/.test(seg))
+            .map((seg, i, all) => (
+              <span key={`${seg}-${i}`} className={`seg${i === all.length - 1 ? " end" : ""}`}>
+                {seg}
+              </span>
+            ))}
         </span>
         <span className="header-actions">
           <button
@@ -494,23 +426,6 @@ export function App() {
               style={treeThemeStyles(theme, accent || "#5e8bff")}
             />
           )}
-
-          {/* impact: selection-driven — results render here, no manual input */}
-          {analyzing && !impact && <p className="muted">Analyzing impact…</p>}
-          {impact && (
-            <>
-              <p className="muted impact-summary">
-                {impact.target.name} · {impact.summary.affectedSymbols} symbols ·{" "}
-                {impact.summary.affectedTests} tests · {impact.summary.unresolvedRelationships}{" "}
-                unresolved
-              </p>
-              <FileTree
-                model={impactModel}
-                className="graph-tree impact-tree"
-                style={treeThemeStyles(theme, accent || "#5e8bff")}
-              />
-            </>
-          )}
         </aside>
 
         <section className="canvas">
@@ -534,7 +449,6 @@ export function App() {
               accent={accent || "#5e8bff"}
               nodes={visibleNodes}
               edges={edges}
-              affectedIds={affectedIds}
               selectedId={selected?.id ?? null}
               onSelect={selectNode}
             />
@@ -546,7 +460,6 @@ export function App() {
             repoId={repoId ?? ""}
             node={selected}
             onSelect={selectNode}
-            onAnalyzeImpact={(s) => void analyzeImpact(s)}
             onCollapse={() => setInspectorOpen(false)}
           />
         )}

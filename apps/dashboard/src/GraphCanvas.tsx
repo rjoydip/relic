@@ -22,7 +22,6 @@ const NODE_H = 44;
 
 // concrete hex for edge/marker colours (SVG attributes can't resolve var())
 const EDGE_HEX: Record<"dark" | "light", string> = { dark: "#3d3d3d", light: "#9aa8bd" };
-const ORANGE_HEX: Record<"dark" | "light", string> = { dark: "#ff8a3d", light: "#dd6610" };
 
 export interface GraphCanvasProps {
   theme?: "dark" | "light";
@@ -30,7 +29,6 @@ export interface GraphCanvasProps {
   accent?: string;
   nodes: GraphNodeDto[];
   edges: GraphEdgeDto[];
-  affectedIds: Set<string>;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }
@@ -97,7 +95,6 @@ function FlowView({
   accent = "#5e8bff",
   nodes,
   edges,
-  affectedIds,
   selectedId,
   onSelect,
 }: GraphCanvasProps) {
@@ -131,18 +128,13 @@ function FlowView({
 
   const flowNodes: Node<FlowData>[] = nodes.map((n) => {
     const selected = n.id === selectedId;
-    const affected = affectedIds.has(n.id);
-    const dimmed = selected
-      ? false
-      : affectedIds.size > 0
-        ? !affected
-        : selectedId !== null && !focus.has(n.id);
+    const dimmed = !selected && selectedId !== null && !focus.has(n.id);
     return {
       id: n.id,
       type: "flow",
       position: position.get(n.id) ?? { x: 0, y: 0 },
       data: { label: `${n.name}${n.startLine ? `:${n.startLine}` : ""}`, nodeType: n.type },
-      className: `flow-node${selected ? " sel" : ""}${affected ? " aff" : ""}${dimmed ? " dim" : ""}`,
+      className: `flow-node${selected ? " sel" : ""}${dimmed ? " dim" : ""}`,
       // visuals live in style.css (theme + hover states); only the per-type
       // accent varies per node, as a CSS custom property
       style: { "--node-accent": COLOR[n.type] ?? "#5d6b7f" } as CSSProperties,
@@ -165,17 +157,14 @@ function FlowView({
       selectable: false,
       deletable: false,
       focusable: false,
-      style: { "--node-accent": COLOR[t] ?? "#5d6b7f" } as CSSProperties,
     };
   });
 
   const flowEdges: Edge[] = edges
     .filter((e) => visible.has(e.sourceId) && visible.has(e.targetId))
     .map((e) => {
-      const impact = affectedIds.has(e.sourceId) && affectedIds.has(e.targetId);
-      const hot =
-        impact || (selectedId !== null && (e.sourceId === selectedId || e.targetId === selectedId));
-      const dimming = affectedIds.size > 0 || (selectedId !== null && !hot);
+      const hot = selectedId !== null && (e.sourceId === selectedId || e.targetId === selectedId);
+      const dimming = selectedId !== null && !hot;
       return {
         id: e.id,
         source: e.sourceId,
@@ -186,14 +175,14 @@ function FlowView({
         labelStyle: { fill: "var(--dim)", fontSize: 10 },
         labelBgStyle: { fill: "var(--panel)" },
         style: {
-          stroke: impact ? "var(--orange)" : hot ? "var(--accent)" : "var(--edge)",
+          stroke: hot ? "var(--accent)" : "var(--edge)",
           strokeWidth: hot ? 2 : 1.4,
           strokeOpacity: hot ? 0.95 : dimming ? 0.16 : e.confidence < 1 ? 0.7 : 1,
         },
         animated: true,
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: impact ? ORANGE_HEX[theme] : hot ? accent : EDGE_HEX[theme],
+          color: hot ? accent : EDGE_HEX[theme],
         },
       };
     });
@@ -212,16 +201,6 @@ function FlowView({
       proOptions={{ hideAttribution: true }}
     >
       <Controls showInteractive={false} position="bottom-left" />
-      <div className="graph-legend" aria-hidden="true">
-        {[...presentTypes]
-          .filter((t) => COLOR[t])
-          .map((t) => (
-            <span key={t}>
-              <i style={{ background: COLOR[t] }} />
-              {t.replace(/_/g, " ")}
-            </span>
-          ))}
-      </div>
     </ReactFlow>
   );
 }
