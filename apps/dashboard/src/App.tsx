@@ -375,36 +375,41 @@ export function App() {
               </button>
             </span>
           </h2>
-          <div className="field">
-            <svg className="field-icon" viewBox="0 0 16 16" aria-hidden="true">
-              <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
-              <path
-                d="M10.2 10.2 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
+          {/* one organized filter bar: search flexes, type sits fixed beside
+              it — both the same pill height */}
+          <div className="explorer-toolbar">
+            <div className="field">
+              <svg className="field-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                <path
+                  d="M10.2 10.2 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <input
+                placeholder="Search nodes…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="Search nodes"
               />
-            </svg>
-            <input
-              placeholder="Search nodes…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search nodes"
-            />
+            </div>
+            <select
+              className="type-filter"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              aria-label="Node type"
+            >
+              <option value="">All types</option>
+              {NODE_TYPES.filter((t) => nodes.some((n) => n.type === t)).map((t) => (
+                <option key={t} value={t}>
+                  {t.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
           </div>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            aria-label="Node type"
-          >
-            <option value="">All node types</option>
-            {NODE_TYPES.filter((t) => nodes.some((n) => n.type === t)).map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
 
           {explorerView === "flat" ? (
             <ul className="node-list">
