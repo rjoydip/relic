@@ -308,6 +308,11 @@ export function App() {
     <div className={`app${showInspector ? "" : " inspector-closed"}`}>
       <header>
         <strong className="brand">MCP Dependency Graph</strong>
+        <IndexForm busy={busy} onIndex={runIndex} />
+        <button onClick={() => void reindex()} disabled={busy}>
+          {busy ? "Working…" : "Re-index"}
+        </button>
+        <span className="muted mono">{repo?.rootPath}</span>
         <button
           className="icon-btn"
           onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
@@ -356,26 +361,21 @@ export function App() {
             </>
           )}
         </span>
-        <select
-          value={repoId ?? ""}
-          onChange={(e) => switchRepo(e.target.value)}
-          aria-label="Repository"
-        >
-          {repositories.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
-        <span className="muted mono">{repo?.rootPath}</span>
-        <button onClick={() => void reindex()} disabled={busy}>
-          {busy ? "Working…" : "Re-index"}
-        </button>
-        <IndexForm busy={busy} onIndex={runIndex} />
       </header>
 
       <main>
         <aside className="explorer">
+          <select
+            value={repoId ?? ""}
+            onChange={(e) => switchRepo(e.target.value)}
+            aria-label="Repository"
+          >
+            {repositories.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
           <h2>
             Explorer
             <span className="view-toggle">
@@ -397,11 +397,24 @@ export function App() {
               </button>
             </span>
           </h2>
-          <input
-            placeholder="Search nodes…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <div className="field">
+            <svg className="field-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              <path
+                d="M10.2 10.2 14 14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+            <input
+              placeholder="Search nodes…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search nodes"
+            />
+          </div>
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}

@@ -149,16 +149,8 @@ header .brand::before {
   border-radius: 3px;
   background: linear-gradient(135deg, var(--accent), #9d6bff);
 }
-header select,
 header .mono {
   flex-shrink: 0;
-}
-header select {
-  background: var(--panel-2);
-  color: inherit;
-  border: 1px solid var(--border-2);
-  border-radius: var(--radius);
-  padding: 5px 8px;
 }
 header .mono {
   color: var(--faint);
@@ -202,6 +194,8 @@ aside.explorer,
 aside.explorer {
   /* the file tree scrolls internally (virtualized viewport) */
   overflow: hidden;
+  padding: 12px;
+  gap: 6px;
 }
 .inspector {
   border-right: none;
@@ -215,7 +209,7 @@ aside h2 {
   letter-spacing: 0.08em;
   color: var(--faint);
   font-weight: 600;
-  margin: 10px 0 2px;
+  margin: 4px 0 0;
 }
 .inspector h2 {
   font-size: 15px;
@@ -491,6 +485,36 @@ aside.explorer h2 {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
+/* modern sidebar controls: pill inputs, icon-led search */
+aside.explorer input,
+aside.explorer select {
+  border-radius: 999px;
+  padding: 7px 12px;
+}
+aside.explorer select {
+  padding-right: 28px;
+}
+aside.explorer .field input {
+  padding-left: 32px;
+}
+.field {
+  position: relative;
+}
+.field-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 13px;
+  height: 13px;
+  color: var(--faint);
+  pointer-events: none;
+}
+aside.explorer > button {
+  width: 100%;
+  border-radius: 999px;
+  padding: 7px 14px;
+}
 .evidence {
   color: var(--faint);
   word-break: break-all;
@@ -605,9 +629,8 @@ footer.status span.warn {
   width: auto;
 }
 header .index-form {
-  margin-left: auto;
-  flex: 1 1 320px;
-  max-width: 460px;
+  flex: 0 1 420px;
+  max-width: 420px;
   width: auto;
 }
 
