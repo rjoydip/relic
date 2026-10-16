@@ -160,6 +160,37 @@ header .mono {
   min-width: 0;
   flex: 1;
 }
+.path-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  max-width: 440px;
+}
+.path-chip .path-icon {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: var(--accent);
+  margin-right: 6px;
+}
+.path-chip .seg {
+  white-space: nowrap;
+}
+.path-chip .seg + .seg::before {
+  content: "/";
+  margin: 0 4px;
+  opacity: 0.5;
+}
+.path-chip .seg.end {
+  color: var(--text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 header > button {
   flex-shrink: 0;
   background: transparent;
@@ -422,6 +453,9 @@ button.link:hover {
    (src/theme.ts, the documented theming pipeline); this class owns only
    the host sizing */
 .graph-tree {
+  /* custom elements default to display:inline — that baseline gap is the
+     stray space above the first row */
+  display: block;
   flex: 1;
   min-height: 180px;
 }
@@ -608,14 +642,49 @@ footer.status span {
 }
 footer.status svg {
   flex-shrink: 0;
-  opacity: 0.75;
+  opacity: 0.9;
 }
 footer.status span.warn svg {
   opacity: 1;
 }
-footer.status span.warn {
+footer.status span.b-files {
+  color: #7fa3cf;
+  background: color-mix(in srgb, #7fa3cf 14%, transparent);
+  border-color: color-mix(in srgb, #7fa3cf 32%, transparent);
+}
+footer.status span.b-nodes {
+  color: #6f9bff;
+  background: color-mix(in srgb, #6f9bff 14%, transparent);
+  border-color: color-mix(in srgb, #6f9bff 32%, transparent);
+}
+footer.status span.b-edges {
+  color: #3fb2a3;
+  background: color-mix(in srgb, #3fb2a3 14%, transparent);
+  border-color: color-mix(in srgb, #3fb2a3 32%, transparent);
+}
+footer.status span.b-time {
   color: var(--amber);
-  border-color: rgba(240, 180, 41, 0.35);
+  background: color-mix(in srgb, var(--amber) 13%, transparent);
+  border-color: color-mix(in srgb, var(--amber) 30%, transparent);
+}
+footer.status span.b-rev {
+  color: #a98fe0;
+  background: color-mix(in srgb, #a98fe0 14%, transparent);
+  border-color: color-mix(in srgb, #a98fe0 32%, transparent);
+}
+footer.status span.b-indexed {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 13%, transparent);
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+}
+footer.status span.b-diag {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 13%, transparent);
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
+}
+footer.status span.warn {
+  background: color-mix(in srgb, var(--red) 24%, transparent);
+  border-color: color-mix(in srgb, var(--red) 48%, transparent);
 }
 
 .index-form {

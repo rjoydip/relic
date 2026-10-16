@@ -35,6 +35,14 @@ const ACCENTS = [
   "#22c55e",
   "#14b8a6",
   "#0ea5e9",
+  "#6366f1",
+  "#7c3aed",
+  "#c026d3",
+  "#e11d48",
+  "#ea580c",
+  "#d97706",
+  "#65a30d",
+  "#059669",
 ];
 
 function passesFilter(n: GraphNodeDto, query: string, typeFilter: string): boolean {
@@ -312,7 +320,25 @@ export function App() {
         <button onClick={() => void reindex()} disabled={busy}>
           {busy ? "Working…" : "Re-index"}
         </button>
-        <span className="muted mono">{repo?.rootPath}</span>
+        <span className="path-chip mono" title={repo?.rootPath ?? ""}>
+          <svg className="path-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M1.8 4.2c0-.8.6-1.4 1.4-1.4h3l1.6 1.8h5c.8 0 1.4.6 1.4 1.4v6c0 .8-.6 1.4-1.4 1.4H3.2c-.8 0-1.4-.6-1.4-1.4z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {(repo?.rootPath ?? "")
+            .split(/[\\/]+/)
+            .filter(Boolean)
+            .map((seg, i, all) => (
+              <span key={`${seg}-${i}`} className={`seg${i === all.length - 1 ? " end" : ""}`}>
+                {seg}
+              </span>
+            ))}
+        </span>
         <button
           className="icon-btn"
           onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
@@ -521,33 +547,33 @@ export function App() {
       <footer className="status">
         {status ? (
           <>
-            <span>
+            <span className="b-files">
               <StatIcon d={ICON.file} />
               {status.fileCount} files
             </span>
-            <span>
+            <span className="b-nodes">
               <StatIcon d={ICON.nodes} />
               {status.nodeCount} nodes
             </span>
-            <span>
+            <span className="b-edges">
               <StatIcon d={ICON.edges} />
               {status.edgeCount} edges
             </span>
-            <span>
+            <span className="b-time">
               <StatIcon d={ICON.clock} />
               {status.durationMs !== null ? `${status.durationMs} ms` : "—"}
             </span>
-            <span className="mono">
+            <span className="b-rev mono">
               <StatIcon d={ICON.rev} />
               rev {status.lastRevision ? status.lastRevision.slice(0, 10) : "none"}
             </span>
-            <span>
+            <span className="b-indexed">
               <StatIcon d={ICON.calendar} />
               {status.indexedAt
                 ? `indexed ${status.indexedAt.slice(0, 19).replace("T", " ")}`
                 : "never indexed"}
             </span>
-            <span className={status.diagnostics.length > 0 ? "warn" : ""}>
+            <span className={`b-diag${status.diagnostics.length > 0 ? " warn" : ""}`}>
               <StatIcon d={ICON.warn} />
               {status.diagnostics.length} diagnostics
             </span>
