@@ -67,7 +67,7 @@ Ask things like:
 ```sh
 bun run dev:api                          # http://127.0.0.1:8787
 # in another shell:
-bunx vite apps/dashboard --open          # proxies /api to :8787
+bun run dev:dashboard                    # http://127.0.0.1:5173, proxies /api to :8787
 ```
 
 The API rejects repository paths outside `allowedRoots` (`PATH_ESCAPE`) and caps pagination; SQL is fully parameterized (see `tests/security/`).
