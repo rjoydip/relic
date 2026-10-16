@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "src", "outDir": "dist" },
+  "include": ["src"],
+  "references": [
+    { "path": "../graph-core" },
+    { "path": "../database" },
+    { "path": "../analyzer-typescript" }
+  ]
+}

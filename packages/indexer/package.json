@@ -1,0 +1,14 @@
+{
+  "name": "@mcpdg/indexer",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mcpdg/analyzer-typescript": "workspace:*",
+    "@mcpdg/database": "workspace:*",
+    "@mcpdg/graph-core": "workspace:*"
+  }
+}

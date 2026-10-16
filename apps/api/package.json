@@ -1,0 +1,12 @@
+{
+  "name": "@mcpdg/api",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@mcpdg/database": "workspace:*",
+    "@mcpdg/graph-core": "workspace:*",
+    "@mcpdg/indexer": "workspace:*",
+    "hono": "^4.9.6"
+  }
+}
