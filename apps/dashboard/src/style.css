@@ -195,14 +195,18 @@ aside.explorer,
   background: var(--panel);
   border-right: 1px solid var(--border);
   padding: 14px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
+aside.explorer {
+  /* the file tree scrolls internally (virtualized viewport) */
+  overflow: hidden;
+}
 .inspector {
   border-right: none;
   border-left: 1px solid var(--border);
+  overflow-y: auto;
   animation: slide-in 180ms ease;
 }
 aside h2 {
@@ -400,8 +404,6 @@ button.link:hover {
   background: #1a1226;
 }
 
-.node-list,
-.impact-list ul,
 .edges {
   list-style: none;
   margin: 0;
@@ -410,8 +412,6 @@ button.link:hover {
   flex-direction: column;
   gap: 2px;
 }
-.node-list li,
-.impact-list li,
 .edges li {
   display: flex;
   align-items: center;
@@ -420,13 +420,31 @@ button.link:hover {
   border-radius: var(--radius);
   min-width: 0;
 }
-.node-list li:hover,
-.impact-list li:hover,
 .edges li:hover {
   background: var(--panel-2);
 }
-.impact-list .muted {
-  flex-shrink: 0;
+
+/* trees.software file tree — themed through the --trees-theme-* contract
+   its shadow stylesheet reads; custom properties pierce the shadow root */
+.graph-tree {
+  --trees-accent-override: var(--accent);
+  --trees-theme-sidebar-bg: transparent;
+  --trees-theme-sidebar-fg: var(--text);
+  --trees-theme-sidebar-border: var(--border-2);
+  --trees-theme-sidebar-header-fg: var(--faint);
+  --trees-theme-list-hover-bg: var(--panel-2);
+  --trees-theme-list-active-selection-bg: color-mix(in srgb, var(--accent) 18%, transparent);
+  --trees-theme-list-active-selection-fg: var(--text);
+  --trees-theme-focus-ring: var(--accent);
+  --trees-theme-input-bg: var(--panel-2);
+  --trees-theme-input-fg: var(--text);
+  --trees-theme-input-border: var(--border-2);
+  --trees-theme-scrollbar-thumb: var(--border-2);
+  flex: 1;
+  min-height: 180px;
+}
+.impact-summary {
+  margin: 0;
 }
 .evidence {
   color: var(--faint);
@@ -748,10 +766,9 @@ header .index-form {
     border: none;
     border-top: 1px solid var(--border);
   }
-  .node-list,
-  .impact-list ul {
-    max-height: 45vh;
-    overflow-y: auto;
+  .graph-tree {
+    height: 45vh;
+    flex: none;
   }
   .hero {
     padding: 28px 20px;

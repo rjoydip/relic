@@ -8,6 +8,7 @@
     "dev": "vite"
   },
   "dependencies": {
+    "@pierre/trees": "^1.0.0-beta.6",
     "@xyflow/react": "^12.9.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { FileTree, useFileTree } from "@pierre/trees/react";
 import {
   api,
   type GraphEdgeDto,
@@ -40,6 +41,30 @@ function passesFilter(n: GraphNodeDto, query: string, typeFilter: string): boole
     if (!hay.includes(query.toLowerCase())) return false;
   }
   return true;
+}
+
+// tree rows are paths: files sit at their repo path, symbols become
+// selectable leaves under their file (the file row doubles as folder)
+function buildTree(list: GraphNodeDto[]) {
+  const paths: string[] = [];
+  const map = new Map<string, GraphNodeDto>();
+  for (const n of list) {
+    const file = (n.filePath ?? n.name).replaceAll("\\", "/");
+    const path = n.type === "file" ? file : `${file}/${n.name}`;
+    if (!map.has(path)) {
+      map.set(path, n);
+      paths.push(path);
+    }
+  }
+  return { paths, map };
+}
+
+function ancestorsOf(paths: string[]): string[] {
+  const set = new Set<string>();
+  for (const p of paths) {
+    for (let i = p.indexOf("/"); i > 0; i = p.indexOf("/", i + 1)) set.add(p.slice(0, i));
+  }
+  return [...set];
 }
 
 export function App() {
@@ -203,6 +228,59 @@ export function App() {
     [nodes, query, typeFilter],
   );
 
+  const explorerTree = useMemo(() => buildTree(visibleNodes), [visibleNodes]);
+  // impact results as a tree: one folder per relationship, leaves tagged
+  // with their depth
+  const impactTree = useMemo(() => {
+    if (!impact)
+      return { paths: [] as string[], dirs: [] as string[], map: new Map<string, GraphNodeDto>() };
+    const paths: string[] = [];
+    const map = new Map<string, GraphNodeDto>();
+    for (const a of impact.affected) {
+      const path = `${a.relationship}/${a.node.name} · d${a.depth}`;
+      if (!map.has(path)) {
+        map.set(path, a.node);
+        paths.push(path);
+      }
+    }
+    const dirs = [...new Set(paths.map((p) => p.slice(0, p.indexOf("/"))))];
+    return { paths, dirs, map };
+  }, [impact]);
+
+  // tree models are created once, so their handlers read the current maps
+  // and selection logic through a ref instead of a stale closure
+  const nav = useRef({ select: selectNode, explorer: explorerTree.map, impact: impactTree.map });
+  nav.current = { select: selectNode, explorer: explorerTree.map, impact: impactTree.map };
+
+  const explorer = useFileTree({
+    paths: explorerTree.paths,
+    initialExpansion: "closed",
+    onSelectionChange: (selected) => {
+      const node = nav.current.explorer.get(selected.at(-1) ?? "");
+      if (node) nav.current.select(node.id);
+    },
+  });
+  const impactModel = useFileTree({
+    paths: impactTree.paths,
+    initialExpansion: "open",
+    onSelectionChange: (selected) => {
+      const node = nav.current.impact.get(selected.at(-1) ?? "");
+      if (node) nav.current.select(node.id);
+    },
+  }).model;
+
+  // keep the models in sync with the data; a search expands the ancestors of
+  // every match so results are actually visible
+  useEffect(() => {
+    explorer.model.resetPaths(
+      explorerTree.paths,
+      query ? { initialExpandedPaths: ancestorsOf(explorerTree.paths) } : undefined,
+    );
+  }, [explorer.model, explorerTree, query]);
+  useEffect(() => {
+    impactModel.resetPaths(impactTree.paths, { initialExpandedPaths: impactTree.dirs });
+  }, [impactModel, impactTree]);
+
   if (loading)
     return (
       <div className="center">
@@ -328,37 +406,17 @@ export function App() {
           </button>
 
           {impact && (
-            <div className="impact-list">
-              <p className="muted">
-                {impact.summary.affectedSymbols} symbols · {impact.summary.affectedTests} tests ·{" "}
-                {impact.summary.unresolvedRelationships} unresolved
+            <>
+              <p className="muted impact-summary">
+                {impact.target.name} · {impact.summary.affectedSymbols} symbols ·{" "}
+                {impact.summary.affectedTests} tests · {impact.summary.unresolvedRelationships}{" "}
+                unresolved
               </p>
-              <ul>
-                {impact.affected.slice(0, 60).map((a) => (
-                  <li key={a.node.id}>
-                    <button className="link" onClick={() => selectNode(a.node.id)}>
-                      {a.node.name}
-                    </button>
-                    <span className="pill">{a.relationship}</span>
-                    <span className="muted mono">
-                      d{a.depth} · c{a.confidence.toFixed(1)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+              <FileTree model={impactModel} className="graph-tree" />
+            </>
           )}
 
-          <ul className="node-list">
-            {visibleNodes.slice(0, 80).map((n) => (
-              <li key={n.id}>
-                <button className="link" onClick={() => selectNode(n.id)}>
-                  {n.name}
-                </button>
-                <span className={`pill t-${n.type}`}>{n.type}</span>
-              </li>
-            ))}
-          </ul>
+          <FileTree model={explorer.model} className="graph-tree" />
         </aside>
 
         <section className="canvas">
