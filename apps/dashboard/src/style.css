@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark;
-  --bg: #0a0d12;
-  --bg-elev: #10151c;
+  --bg: #0a0a0a;
+  --bg-elev: #101010;
   --panel: #0d1117;
   --panel-2: #131922;
   --panel-3: #1a222e;
@@ -21,14 +21,13 @@
   --radius-lg: 12px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
-  --shadow-hover: 0 6px 18px rgba(0, 0, 0, 0.4);
-  /* graph surface */
-  --node-bg: #121824;
-  --node-bg-sel: #182031;
-  --node-border: #232d3d;
-  --node-border-sel: #3d5c9e;
-  --edge: #4b5d80;
-  --dots: #1e2733;
+  /* graph surface — turbo.build (turbo-flow) language: near-black canvas,
+     #111 cards, hairline #333 borders, gray edges, #1a1a1a dots */
+  --node-bg: #111111;
+  --node-bg-sel: #1c1c1c;
+  --node-border: #262626;
+  --node-border-sel: #404040;
+  --edge: #333333;
 }
 
 [data-theme="light"] {
@@ -49,13 +48,11 @@
   --red: #d64545;
   --shadow: 0 1px 2px rgba(20, 35, 70, 0.08);
   --shadow-lg: 0 12px 40px rgba(20, 35, 70, 0.14);
-  --shadow-hover: 0 6px 18px rgba(20, 35, 70, 0.16);
   --node-bg: #ffffff;
-  --node-bg-sel: #eaf1ff;
-  --node-border: #d5dce8;
-  --node-border-sel: #4f7df9;
-  --edge: #a9b6c9;
-  --dots: #d7dde8;
+  --node-bg-sel: #f0f4ff;
+  --node-border: #e4e4e7;
+  --node-border-sel: #d4d4d8;
+  --edge: #c4c4cc;
 }
 
 * {
@@ -176,20 +173,6 @@ header .mono {
   flex-shrink: 0;
   color: var(--accent);
   margin-right: 6px;
-}
-.path-chip .seg {
-  white-space: nowrap;
-}
-.path-chip .seg + .seg::before {
-  content: "/";
-  margin: 0 4px;
-  opacity: 0.5;
-}
-.path-chip .seg.end {
-  color: var(--text);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .header-actions {
   margin-left: auto;
@@ -737,21 +720,19 @@ header .index-form {
   font-size: 12.5px;
 }
 
-/* React Flow */
-.react-flow__background path {
-  stroke: var(--dots);
-}
+/* React Flow — turbo.build (turbo-flow) card language */
 .flow-node {
   width: 210px;
-  padding: 8px 12px;
-  border-radius: 10px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  border-radius: 12px;
   font-size: 12.5px;
   font-weight: 500;
   background: var(--node-bg);
   color: var(--text);
   border: 1px solid var(--node-border);
-  border-left: 3px solid var(--node-accent, #5d6b7f);
-  box-shadow: var(--shadow);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   cursor: pointer;
   transition:
     box-shadow 150ms ease,
@@ -759,6 +740,26 @@ header .index-form {
     opacity 200ms ease,
     background 150ms ease,
     transform 350ms cubic-bezier(0.25, 0.8, 0.35, 1);
+}
+/* turbo-flow card: accent icon chip on the left, name + type stacked */
+.fn-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--node-accent, #5d6b7f) 16%, transparent);
+  color: var(--node-accent, #5d6b7f);
+}
+.fn-chip svg {
+  width: 15px;
+  height: 15px;
+}
+.fn-body {
+  min-width: 0;
+  margin-left: 10px;
 }
 .fn-name {
   display: block;
@@ -787,10 +788,10 @@ header .index-form {
 }
 .group-label {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--node-accent, var(--dim));
+  color: var(--faint);
   background: none;
   border: none;
   padding: 0;
@@ -798,17 +799,17 @@ header .index-form {
   pointer-events: none;
 }
 .flow-node:hover {
-  border-color: var(--accent);
+  border-color: var(--node-border-sel);
   box-shadow:
-    0 0 0 2px var(--accent-glow),
-    var(--shadow-hover);
+    0 0 0 1px color-mix(in srgb, var(--node-accent, var(--accent)) 40%, transparent),
+    0 4px 14px rgba(0, 0, 0, 0.4);
 }
 .flow-node.sel {
   background: var(--node-bg-sel);
-  border-color: var(--node-border-sel);
+  border-color: var(--node-accent, var(--node-border-sel));
   box-shadow:
-    0 0 0 3px var(--accent-glow),
-    var(--shadow-hover);
+    0 0 0 1px var(--node-accent, var(--accent)),
+    0 4px 18px rgba(0, 0, 0, 0.45);
 }
 .flow-node.aff {
   border-color: var(--orange);

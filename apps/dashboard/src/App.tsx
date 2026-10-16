@@ -62,7 +62,6 @@ export function App() {
   const [edges, setEdges] = useState<GraphEdgeDto[]>([]);
   const [selected, setSelected] = useState<GraphNodeDto | null>(null);
   const [impact, setImpact] = useState<ImpactDto | null>(null);
-  const [impactSymbol, setImpactSymbol] = useState("");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -79,6 +78,8 @@ export function App() {
   );
   const [accent, setAccent] = useState(() => localStorage.getItem("mcpdg-accent") ?? "");
   const [accentOpen, setAccentOpen] = useState(false);
+  // impact responses may land out of order — only the newest request wins
+  const impactSeq = useRef(0);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -111,7 +112,7 @@ export function App() {
   useEffect(() => {
     setSelected(null);
     setImpact(null);
-    setImpactSymbol("");
+    impactSeq.current += 1;
     setQuery("");
     setTypeFilter("");
     setError(null);
@@ -142,24 +143,35 @@ export function App() {
       .finally(() => setLoading(false));
   }, [loadGraph]);
 
+  // impact analysis runs automatically on node selection (no manual input);
+  // only nodes carrying a qualifiedName can be looked up, the rest just
+  // clear the results
   const analyzeImpact = useCallback(
     async (symbol: string) => {
       if (!repoId || !symbol.trim()) return;
+      const seq = ++impactSeq.current;
       setAnalyzing(true);
       setError(null);
       try {
         const result = await api.impact(repoId, symbol.trim(), 5);
+        if (seq !== impactSeq.current) return;
         setImpact(result);
-        setImpactSymbol(symbol.trim());
         setSelected(result.target);
       } catch (err) {
+        if (seq !== impactSeq.current) return;
         setError(err instanceof Error ? err.message : String(err));
       } finally {
-        setAnalyzing(false);
+        if (seq === impactSeq.current) setAnalyzing(false);
       }
     },
     [repoId],
   );
+
+  const clearImpact = useCallback(() => {
+    impactSeq.current += 1;
+    setImpact(null);
+    setAnalyzing(false);
+  }, []);
 
   // switching repositories loads the new graph under a canvas overlay — the
   // index/re-index buttons must not light up ("Working…") for an impact
@@ -218,14 +230,21 @@ export function App() {
         setTypeFilter("");
       }
       setInspectorOpen(true);
-      if (found) setSelected(found);
-      else
+      if (found) {
+        setSelected(found);
+        if (found.qualifiedName) void analyzeImpact(found.qualifiedName);
+        else clearImpact();
+      } else
         void api
           .node(id)
-          .then(setSelected)
+          .then((n) => {
+            setSelected(n);
+            if (n.qualifiedName) void analyzeImpact(n.qualifiedName);
+            else clearImpact();
+          })
           .catch(() => setSelected(null));
     },
-    [nodes, query, typeFilter],
+    [nodes, query, typeFilter, analyzeImpact, clearImpact],
   );
 
   const affectedIds = useMemo(
@@ -336,14 +355,7 @@ export function App() {
               strokeLinejoin="round"
             />
           </svg>
-          {(repo?.rootPath ?? "")
-            .split(/[\\/]+/)
-            .filter(Boolean)
-            .map((seg, i, all) => (
-              <span key={`${seg}-${i}`} className={`seg${i === all.length - 1 ? " end" : ""}`}>
-                {seg}
-              </span>
-            ))}
+          {repo?.name ?? ""}
         </span>
         <span className="header-actions">
           <button
@@ -483,20 +495,8 @@ export function App() {
             />
           )}
 
-          <h2>Impact</h2>
-          <input
-            placeholder="Symbol, e.g. UserService.updateUser"
-            value={impactSymbol}
-            onChange={(e) => setImpactSymbol(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void analyzeImpact(impactSymbol)}
-          />
-          <button
-            onClick={() => void analyzeImpact(impactSymbol)}
-            disabled={analyzing || !impactSymbol.trim()}
-          >
-            {analyzing ? "Analyzing…" : "Analyze impact"}
-          </button>
-
+          {/* impact: selection-driven — results render here, no manual input */}
+          {analyzing && !impact && <p className="muted">Analyzing impact…</p>}
           {impact && (
             <>
               <p className="muted impact-summary">

@@ -1,6 +1,4 @@
 import {
-  Background,
-  BackgroundVariant,
   Controls,
   Handle,
   MarkerType,
@@ -23,7 +21,7 @@ const NODE_W = 210;
 const NODE_H = 44;
 
 // concrete hex for edge/marker colours (SVG attributes can't resolve var())
-const EDGE_HEX: Record<"dark" | "light", string> = { dark: "#4b5d80", light: "#9aa8bd" };
+const EDGE_HEX: Record<"dark" | "light", string> = { dark: "#3d3d3d", light: "#9aa8bd" };
 const ORANGE_HEX: Record<"dark" | "light", string> = { dark: "#ff8a3d", light: "#dd6610" };
 
 export interface GraphCanvasProps {
@@ -37,14 +35,44 @@ export interface GraphCanvasProps {
   onSelect: (id: string) => void;
 }
 
+// turbo-flow card glyphs — one 16px stroke glyph per node type, tinted by
+// the type colour inside the accent chip
+const TYPE_GLYPH: Record<string, string> = {
+  symbol:
+    "M6.2 4.2c-1.2 0-1 1.5-1 2.3 0 .7-.4 1-.8 1.7-.4.6-.7 1-.7 1.7 0 .8-.2 2.3 1 2.3M9.8 4.2c1.2 0 1 1.5 1 2.3 0 .7.4 1 .8 1.7.4.6.7 1 .7 1.7 0 .8.2 2.3-1 2.3",
+  route: "M3 8h8 M8 5l3 3-3 3",
+  api_operation:
+    "M5 3v3 M11 3v3 M3.5 6h9v2.5A3.5 3.5 0 0 1 9 12H7a3.5 3.5 0 0 1-3.5-3.5z M8 12v1.6",
+  frontend_operation: "M2.5 4h11v8h-11z M2.5 6.5h11 M4.8 8.2l1.2 1.2-1.2 1.2 M8 10.6h3",
+  database_table:
+    "M3 4.2c0-1 2.2-1.6 5-1.6s5 .6 5 1.6-2.2 1.6-5 1.6-5-.6-5-1.6z M3 4.2v7.6c0 1 2.2 1.6 5 1.6s5-.6 5-1.6V4.2 M3 8c0 1 2.2 1.6 5 1.6s5-.6 5-1.6",
+  test: "M6.5 2.6v4L3.6 12a1.2 1.2 0 0 0 1 1.8h6.8a1.2 1.2 0 0 0 1-1.8L9.5 6.6v-4 M5.6 2.6h4.8 M5.2 9.2h5.6",
+  file: "M4 2.2h5l3 3v8.6H4z M9 2.2v3h3",
+  queue: "M2.5 5h11 M2.5 8h11 M2.5 11h7",
+};
+
 function FlowNodeCard({ data }: NodeProps<Node<FlowData>>) {
   return (
     <>
       {/* custom node types render no default handles — without these the
           edges have nothing to attach to and never draw */}
       <Handle type="target" position={Position.Left} className="flow-handle" />
-      <span className="fn-name">{data.label}</span>
-      <span className="fn-type">{data.nodeType.replace(/_/g, " ")}</span>
+      <span className="fn-chip">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path
+            d={TYPE_GLYPH[data.nodeType] ?? TYPE_GLYPH.file}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      <span className="fn-body">
+        <span className="fn-name">{data.label}</span>
+        <span className="fn-type">{data.nodeType.replace(/_/g, " ")}</span>
+      </span>
       <Handle type="source" position={Position.Right} className="flow-handle" />
     </>
   );
@@ -183,7 +211,6 @@ function FlowView({
       onNodeClick={(_, node) => onSelect(node.id)}
       proOptions={{ hideAttribution: true }}
     >
-      <Background variant={BackgroundVariant.Dots} gap={18} color="#1e2733" />
       <Controls showInteractive={false} position="bottom-left" />
       <div className="graph-legend" aria-hidden="true">
         {[...presentTypes]
