@@ -76,11 +76,11 @@ export const api = {
     request<IndexStatusDto>(`/index-status?repository=${encodeURIComponent(repo)}`),
   nodes: (repo: string, q?: string, type?: string) =>
     request<{ nodes: GraphNodeDto[] }>(
-      `/graph/nodes?repository=${encodeURIComponent(repo)}&limit=500${q ? `&q=${encodeURIComponent(q)}` : ""}${type ? `&type=${type}` : ""}`,
+      `/graph/nodes?repository=${encodeURIComponent(repo)}&limit=2000${q ? `&q=${encodeURIComponent(q)}` : ""}${type ? `&type=${type}` : ""}`,
     ),
   edges: (repo: string) =>
     request<{ edges: GraphEdgeDto[] }>(
-      `/graph/edges?repository=${encodeURIComponent(repo)}&limit=1000`,
+      `/graph/edges?repository=${encodeURIComponent(repo)}&limit=5000`,
     ),
   node: (id: string) => request<GraphNodeDto>(`/graph/nodes/${encodeURIComponent(id)}`),
   neighborhood: (id: string) =>

@@ -14,7 +14,7 @@ export interface ApiOptions {
   allowedRoots?: string[];
 }
 
-const MAX_LIMIT = 500;
+const MAX_LIMIT = 5000;
 
 function limitOf(raw: string | undefined, fallback = 50): number {
   const value = Number(raw ?? fallback);

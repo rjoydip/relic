@@ -3,18 +3,9 @@ import type { CSSProperties } from "react";
 
 type ThemeMode = "dark" | "light";
 
-// Custom icons per trees.software/#custom-icons: the complete colored set,
-// extended with a project sprite — the generic-file slot becomes a "symbol"
-// glyph (braces), so extensionless leaves (our symbols) read apart from
-// real files. currentColor inherits the tree's themed foreground.
-const SYMBOL_SPRITE =
-  '<svg xmlns="http://www.w3.org/2000/svg"><symbol id="mcpdg-symbol" viewBox="0 0 16 16"><path d="M6.5 3.5c-1.4 0-1.2 1.7-1.2 2.6 0 .8-.5 1.2-.9 1.9-.4.7-.8 1.1-.8 1.9 0 .9-.2 2.6 1.2 2.6M9.5 3.5c1.4 0 1.2 1.7 1.2 2.6 0 .8.5 1.2.9 1.9.4.7.8 1.1.8 1.9 0 .9.2 2.6-1.2 2.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol></svg>';
-
 export const TREE_ICONS: FileTreeIconConfig = {
   set: "complete",
   colored: true,
-  spriteSheet: SYMBOL_SPRITE,
-  remap: { file: { name: "mcpdg-symbol" } },
 };
 
 // VS Code workbench keys the trees theme pipeline reads (trees.software/

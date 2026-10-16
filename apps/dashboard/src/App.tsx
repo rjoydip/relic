@@ -317,8 +317,14 @@ export function App() {
       <header>
         <strong className="brand">MCP Dependency Graph</strong>
         <IndexForm busy={busy} onIndex={runIndex} />
-        <button onClick={() => void reindex()} disabled={busy}>
-          {busy ? "Working…" : "Re-index"}
+        <button
+          className="icon-btn"
+          onClick={() => void reindex()}
+          disabled={busy}
+          title="Re-index repository"
+          aria-label="Re-index repository"
+        >
+          {busy ? <span className="spinner mini" /> : <RefreshIcon />}
         </button>
         <span className="path-chip mono" title={repo?.rootPath ?? ""}>
           <svg className="path-icon" viewBox="0 0 16 16" aria-hidden="true">
@@ -339,53 +345,55 @@ export function App() {
               </span>
             ))}
         </span>
-        <button
-          className="icon-btn"
-          onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-          title="Toggle dark / light theme"
-          aria-label="Toggle theme"
-        >
-          {theme === "dark" ? "☀" : "☾"}
-        </button>
-        <span className="accent-wrap">
+        <span className="header-actions">
           <button
-            className="swatch-btn"
-            style={{ "--swatch": accent || "#5e8bff" } as CSSProperties}
-            onClick={() => setAccentOpen((o) => !o)}
-            title="Accent color"
-            aria-label="Accent color"
-            aria-haspopup="dialog"
-            aria-expanded={accentOpen}
-          />
-          {accentOpen && (
-            <>
-              <div className="popover-backdrop" onClick={() => setAccentOpen(false)} />
-              <div className="accent-pop" role="group" aria-label="Accent colors">
-                {ACCENTS.map((c) => (
+            className="icon-btn"
+            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+            title="Toggle dark / light theme"
+            aria-label="Toggle theme"
+          >
+            {theme === "dark" ? "☀" : "☾"}
+          </button>
+          <span className="accent-wrap">
+            <button
+              className="swatch-btn"
+              style={{ "--swatch": accent || "#5e8bff" } as CSSProperties}
+              onClick={() => setAccentOpen((o) => !o)}
+              title="Accent color"
+              aria-label="Accent color"
+              aria-haspopup="dialog"
+              aria-expanded={accentOpen}
+            />
+            {accentOpen && (
+              <>
+                <div className="popover-backdrop" onClick={() => setAccentOpen(false)} />
+                <div className="accent-pop" role="group" aria-label="Accent colors">
+                  {ACCENTS.map((c) => (
+                    <button
+                      key={c}
+                      className={`swatch${(accent || "#5e8bff").toLowerCase() === c ? " active" : ""}`}
+                      style={{ "--c": c } as CSSProperties}
+                      onClick={() => {
+                        setAccent(c);
+                        setAccentOpen(false);
+                      }}
+                      aria-label={`Accent ${c}`}
+                    />
+                  ))}
                   <button
-                    key={c}
-                    className={`swatch${(accent || "#5e8bff").toLowerCase() === c ? " active" : ""}`}
-                    style={{ "--c": c } as CSSProperties}
+                    className="swatch reset"
                     onClick={() => {
-                      setAccent(c);
+                      setAccent("");
                       setAccentOpen(false);
                     }}
-                    aria-label={`Accent ${c}`}
-                  />
-                ))}
-                <button
-                  className="swatch reset"
-                  onClick={() => {
-                    setAccent("");
-                    setAccentOpen(false);
-                  }}
-                  title="Reset accent"
-                >
-                  ↺
-                </button>
-              </div>
-            </>
-          )}
+                    title="Reset accent"
+                  >
+                    ↺
+                  </button>
+                </div>
+              </>
+            )}
+          </span>
         </span>
       </header>
 
@@ -586,6 +594,35 @@ export function App() {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M13.3 8a5.3 5.3 0 1 1-1.55-3.75M13.5 2.5V6H10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M8 3.2v9.6M3.2 8h9.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 function StatIcon({ d }: { d: string }) {
   return (
     <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
@@ -634,8 +671,14 @@ function IndexForm({
         onChange={(e) => setValue(e.target.value)}
         aria-label="Repository source"
       />
-      <button type="submit" disabled={busy || !value.trim()}>
-        {busy ? "Indexing…" : "Index"}
+      <button
+        type="submit"
+        className="icon-btn"
+        disabled={busy || !value.trim()}
+        title="Index repository"
+        aria-label="Index repository"
+      >
+        {busy ? <span className="spinner mini" /> : <PlusIcon />}
       </button>
     </form>
   );

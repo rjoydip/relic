@@ -27,7 +27,7 @@
   --node-bg-sel: #182031;
   --node-border: #232d3d;
   --node-border-sel: #3d5c9e;
-  --edge: #3c4a61;
+  --edge: #4b5d80;
   --dots: #1e2733;
 }
 
@@ -190,6 +190,13 @@ header .mono {
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.header-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 header > button {
   flex-shrink: 0;
@@ -770,6 +777,14 @@ header .index-form {
   color: var(--node-accent, var(--dim));
   opacity: 0.9;
 }
+/* invisible edge attach points — custom nodes render no default handles */
+.flow-handle {
+  width: 6px;
+  height: 6px;
+  background: var(--node-accent, var(--accent));
+  border: none;
+  opacity: 0;
+}
 .group-label {
   font-size: 10px;
   font-weight: 700;
@@ -986,7 +1001,7 @@ header .index-form {
 .accent-pop {
   position: absolute;
   top: calc(100% + 8px);
-  left: 0;
+  right: 0;
   z-index: 30;
   display: grid;
   grid-template-columns: repeat(4, 26px);
@@ -1075,6 +1090,12 @@ header .index-form {
   border-right-color: #a78bfa;
   border-radius: 50%;
   animation: spin 750ms linear infinite;
+}
+.spinner.mini {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  border-width: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -2,7 +2,9 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  Handle,
   MarkerType,
+  Position,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -21,7 +23,7 @@ const NODE_W = 210;
 const NODE_H = 44;
 
 // concrete hex for edge/marker colours (SVG attributes can't resolve var())
-const EDGE_HEX: Record<"dark" | "light", string> = { dark: "#3a4457", light: "#c2ccd9" };
+const EDGE_HEX: Record<"dark" | "light", string> = { dark: "#4b5d80", light: "#9aa8bd" };
 const ORANGE_HEX: Record<"dark" | "light", string> = { dark: "#ff8a3d", light: "#dd6610" };
 
 export interface GraphCanvasProps {
@@ -38,8 +40,12 @@ export interface GraphCanvasProps {
 function FlowNodeCard({ data }: NodeProps<Node<FlowData>>) {
   return (
     <>
+      {/* custom node types render no default handles — without these the
+          edges have nothing to attach to and never draw */}
+      <Handle type="target" position={Position.Left} className="flow-handle" />
       <span className="fn-name">{data.label}</span>
       <span className="fn-type">{data.nodeType.replace(/_/g, " ")}</span>
+      <Handle type="source" position={Position.Right} className="flow-handle" />
     </>
   );
 }
@@ -153,8 +159,8 @@ function FlowView({
         labelBgStyle: { fill: "var(--panel)" },
         style: {
           stroke: impact ? "var(--orange)" : hot ? "var(--accent)" : "var(--edge)",
-          strokeWidth: hot ? 2 : 1,
-          strokeOpacity: hot ? 0.95 : dimming ? 0.16 : e.confidence < 1 ? 0.6 : 0.9,
+          strokeWidth: hot ? 2 : 1.4,
+          strokeOpacity: hot ? 0.95 : dimming ? 0.16 : e.confidence < 1 ? 0.7 : 1,
         },
         animated: true,
         markerEnd: {
