@@ -70,4 +70,27 @@ describe("dashboard highlighter", () => {
   test("unknown languages resolve to null", async () => {
     expect(await loadHighlighter("not-a-language")).toBeNull();
   });
+
+  // every lazy-loaded grammar loader must run at least once — bun enforces
+  // coverage thresholds per file, and these loaders are most of the file
+  test("loads every bundled language", async () => {
+    const languages = [
+      "bash",
+      "css",
+      "diff",
+      "html",
+      "javascript",
+      "json",
+      "jsx",
+      "markdown",
+      "python",
+      "sql",
+      "tsx",
+      "typescript",
+      "yaml",
+    ];
+    for (const lang of languages) {
+      expect(await loadHighlighter(lang)).not.toBeNull();
+    }
+  });
 });

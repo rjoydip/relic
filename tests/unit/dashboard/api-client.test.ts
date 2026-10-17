@@ -50,3 +50,28 @@ test("reindex posts the repository root", async () => {
   expect(call.init?.method).toBe("POST");
   expect(JSON.parse(String(call.init?.body))).toEqual({ root: "/tmp/root" });
 });
+
+test("remaining endpoints build their URLs", async () => {
+  mockFetch(() => Response.json({}));
+  await api.indexStatus("r 1");
+  await api.edges("r 1");
+  await api.node("id/1");
+  await api.neighborhood("id/1");
+  await api.relatedTests("r 1", "sym bol");
+  expect(calls.map((c) => c.url)).toEqual([
+    "/api/index-status?repository=r%201",
+    "/api/graph/edges?repository=r%201&limit=5000",
+    "/api/graph/nodes/id%2F1",
+    "/api/graph/nodes/id%2F1/neighborhood?depth=1&limit=200",
+    "/api/tests/related?repository=r%201&symbol=sym%20bol",
+  ]);
+});
+
+test("indexSource posts the source body", async () => {
+  mockFetch(() => Response.json({ repositoryId: "r", nodeCount: 0, edgeCount: 0 }));
+  await api.indexSource("C:/code");
+  const call = calls[0]!;
+  expect(calls[0]?.url).toBe("/api/index");
+  expect(call.init?.method).toBe("POST");
+  expect(JSON.parse(String(call.init?.body))).toEqual({ source: "C:/code" });
+});
