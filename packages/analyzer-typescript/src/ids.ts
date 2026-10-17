@@ -19,8 +19,6 @@ export const apiOperationId = (repositoryId: string, qualifiedName: string): str
   sha1(`${repositoryId}:api_operation:${qualifiedName}`);
 export const frontendOperationId = (repositoryId: string, name: string): string =>
   sha1(`${repositoryId}:frontend_operation:${name}`);
-export const queueId = (repositoryId: string, name: string): string =>
-  sha1(`${repositoryId}:queue:${name}`);
 export const databaseTableId = (repositoryId: string, table: string): string =>
   sha1(`${repositoryId}:table:${table}`);
 export const edgeId = (sourceId: string, targetId: string, type: string): string =>

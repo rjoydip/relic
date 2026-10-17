@@ -4,6 +4,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+// The e2e run points this at its own isolated API instance (see
+// playwright.config.ts); the dev default stays the local dev API.
+const apiTarget = process.env.MCPDG_API_URL ?? "http://127.0.0.1:8787";
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -13,7 +17,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8787",
+        target: apiTarget,
         configure: (proxy) => {
           proxy.on("error", (_err, _req, res) => {
             // A dead dev API otherwise surfaces as a bodyless 500 ("Request
@@ -23,8 +27,7 @@ export default defineConfig({
               res.end(
                 JSON.stringify({
                   error: "API_UNAVAILABLE",
-                  message:
-                    "Graph API is not running at 127.0.0.1:8787 — start it with `bun run dev:api`, or run `mcpdg` for the bundled dashboard.",
+                  message: `Graph API is not running at ${apiTarget} — start it with \`bun run dev:api\`, or run \`mcpdg\` for the bundled dashboard.`,
                 }),
               );
             }

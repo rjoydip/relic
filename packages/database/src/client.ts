@@ -1,7 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
 
-export const SCHEMA_VERSION = 1;
-
 const MIGRATIONS: Array<{ version: number; sql: string }> = [
   {
     version: 1,

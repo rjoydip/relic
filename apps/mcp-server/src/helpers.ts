@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import type { GraphNode, NodeType } from "@mcpdg/graph-core";
 import { GraphError } from "@mcpdg/graph-core";
-import { repositoryIdFor, toRepoRelative } from "@mcpdg/analyzer-typescript";
+import { repositoryIdFor } from "@mcpdg/analyzer-typescript";
 
 export interface ChangedRange {
   filePath: string;
@@ -73,14 +73,6 @@ export function symbolsForRanges(nodes: GraphNode[], ranges: ChangedRange[]): Gr
     }
   }
   return targets;
-}
-
-export function assertInsideRoot(rootPath: string, relativePath: string): string {
-  try {
-    return toRepoRelative(rootPath, relativePath);
-  } catch {
-    throw new GraphError("PATH_ESCAPE", `Path outside repository: ${relativePath}`);
-  }
 }
 
 export function coerceRepositoryId(

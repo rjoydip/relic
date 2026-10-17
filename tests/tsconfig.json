@@ -6,7 +6,8 @@
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
-    "types": ["bun"]
+    "types": ["bun"],
+    "jsx": "react-jsx"
   },
   "include": ["**/*.ts", "fixtures/**/*.ts"],
   "exclude": ["node_modules"]

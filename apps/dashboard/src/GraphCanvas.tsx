@@ -98,7 +98,6 @@ function FlowView({
   const { setCenter, getViewport, setViewport } = useReactFlow();
   const position = useMemo(() => layoutGraph(nodes, edges), [nodes, edges]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const didInit = useRef(false);
 
   // Point the view at the selection — sidebar clicks (impact list, search)
   // must land on the node, not just populate the inspector.
@@ -170,12 +169,13 @@ function FlowView({
   // Initial view: a readable zoom anchored at the top of the graph. Fitting
   // the whole graph to the screen shrinks big repos into unreadable dots —
   // clamp the zoom instead and let the user scroll down to explore.
-  // (key={repoId} on GraphCanvas remounts it, so this re-runs per repo)
-  useEffect(() => {
-    if (didInit.current) return;
+  // Set in onInit, NOT in an effect: ReactFlow applies its own default
+  // viewport asynchronously while initialising, which overwrites any
+  // setViewport call made earlier. (key={repoId} remounts GraphCanvas, so
+  // this re-runs per repo.)
+  const applyInitialViewport = () => {
     const el = containerRef.current;
     if (!el || flowNodes.length === 0) return;
-    didInit.current = true;
     const bounds = getNodesBounds(flowNodes);
     const pad = 40;
     // fit the graph's width when it fits, stay within [0.55, 0.9] otherwise
@@ -185,7 +185,7 @@ function FlowView({
       x: (el.clientWidth - bounds.width * zoom) / 2 - bounds.x * zoom,
       y: pad - bounds.y * zoom,
     });
-  }, [flowNodes, setViewport]);
+  };
 
   return (
     <ReactFlow
@@ -197,6 +197,7 @@ function FlowView({
       colorMode={theme}
       nodesDraggable={false}
       panOnScroll
+      onInit={applyInitialViewport}
       onNodeClick={(_, node) => onSelect(node.id)}
       proOptions={{ hideAttribution: true }}
     >
