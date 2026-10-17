@@ -80,6 +80,26 @@ describe("dashboard API", () => {
     expect(missing.status).toBe(404);
   });
 
+  it("serves repository file content and blocks escapes", async () => {
+    const nodes = await json<{ nodes: Array<{ filePath: string | null }> }>(
+      await app.request(`/api/graph/nodes?repository=${repoId}&limit=5`),
+    );
+    const path = nodes.nodes.find((n) => n.filePath)!.filePath!;
+
+    const file = await json<{ content: string }>(
+      await app.request(`/api/repositories/${repoId}/file?path=${encodeURIComponent(path)}`),
+    );
+    expect(file.content.length).toBeGreaterThan(0);
+
+    const escape = await app.request(
+      `/api/repositories/${repoId}/file?path=${encodeURIComponent("../../etc/passwd")}`,
+    );
+    expect(escape.status).toBe(400);
+
+    const absent = await app.request(`/api/repositories/${repoId}/file?path=src/nope.ts`);
+    expect(absent.status).toBe(400);
+  });
+
   it("runs impact analysis consistent with the graph service", async () => {
     const res = await app.request("/api/impact", {
       method: "POST",

@@ -66,6 +66,10 @@ export const api = {
       `/graph/edges?repository=${encodeURIComponent(repo)}&limit=5000`,
     ),
   node: (id: string) => request<GraphNodeDto>(`/graph/nodes/${encodeURIComponent(id)}`),
+  fileContent: (repo: string, path: string) =>
+    request<{ path: string; content: string }>(
+      `/repositories/${encodeURIComponent(repo)}/file?path=${encodeURIComponent(path)}`,
+    ),
   neighborhood: (id: string) =>
     request<{ nodes: GraphNodeDto[]; steps: EvidenceStep[] }>(
       `/graph/nodes/${encodeURIComponent(id)}/neighborhood?depth=1&limit=200`,

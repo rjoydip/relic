@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { ChevronRightIcon } from "lucide-react";
 import { api, type EvidenceStep, type GraphNodeDto } from "./api";
+import type { CodeTarget } from "./CodeModal";
 
 interface InspectorProps {
   repoId: string;
   node: GraphNodeDto | null;
   onSelect: (id: string) => void;
   onCollapse: () => void;
+  onOpenCode: (code: CodeTarget) => void;
 }
 
-export function NodeInspector({ repoId, node, onSelect, onCollapse }: InspectorProps) {
+export function NodeInspector({ repoId, node, onSelect, onCollapse, onOpenCode }: InspectorProps) {
   const [steps, setSteps] = useState<EvidenceStep[]>([]);
   const [tests, setTests] = useState<GraphNodeDto[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -61,14 +65,15 @@ export function NodeInspector({ repoId, node, onSelect, onCollapse }: InspectorP
     <div className="inspector">
       <div className="inspector-head">
         <h2>{node.qualifiedName ?? node.name}</h2>
-        <button
-          className="icon-btn"
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={onCollapse}
           title="Hide details"
           aria-label="Hide details"
         >
-          ›
-        </button>
+          <ChevronRightIcon />
+        </Button>
       </div>
       <dl className="facts">
         <dt>Type</dt>
@@ -79,9 +84,22 @@ export function NodeInspector({ repoId, node, onSelect, onCollapse }: InspectorP
           <>
             <dt>Source</dt>
             <dd className="mono">
-              {node.filePath}
-              {node.startLine ? `:${node.startLine}` : ""}
-              {node.endLine && node.endLine !== node.startLine ? `–${node.endLine}` : ""}
+              {/* opens the code popup, centered on the node's line */}
+              <button
+                className="link"
+                title="Show file content"
+                onClick={() =>
+                  onOpenCode({
+                    path: node.filePath!,
+                    startLine: node.startLine,
+                    endLine: node.endLine,
+                  })
+                }
+              >
+                {node.filePath}
+                {node.startLine ? `:${node.startLine}` : ""}
+                {node.endLine && node.endLine !== node.startLine ? `–${node.endLine}` : ""}
+              </button>
             </dd>
           </>
         )}

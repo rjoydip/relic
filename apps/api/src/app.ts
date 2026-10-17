@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { Hono } from "hono";
@@ -124,6 +124,23 @@ export function buildApp(options: ApiOptions): Hono & { graph: OpenGraph } {
       if (!root) throw new GraphError("INVALID_INPUT", "repository root is required for indexing");
       assertAllowed(resolve(root));
       return c.json(store.indexer.index(root));
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  // Serves a repository file for the dashboard's content peek; paths are
+  // repo-relative and must stay inside the repository root.
+  app.get("/api/repositories/:id/file", (c) => {
+    try {
+      const meta = requireIndex(c.req.param("id"));
+      const path = c.req.query("path");
+      if (!path) throw new GraphError("INVALID_INPUT", "path is required");
+      const abs = resolve(meta.rootPath, path);
+      if (!abs.startsWith(meta.rootPath + sep))
+        throw new GraphError("PATH_ESCAPE", `Path outside repository: ${path}`);
+      if (!existsSync(abs)) throw new GraphError("INVALID_INPUT", `File not found: ${path}`);
+      return c.json({ path, content: readFileSync(abs, "utf8") });
     } catch (err) {
       return fail(c, err);
     }

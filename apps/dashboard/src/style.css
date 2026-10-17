@@ -166,27 +166,26 @@ header .mono {
   border: 1px solid var(--border);
   font-size: 12px;
   max-width: 440px;
+  overflow: hidden;
+}
+.path-chip .cn-breadcrumb-list {
+  flex-wrap: nowrap;
+  font-size: 12px;
+}
+.path-chip .cn-breadcrumb-item {
+  min-width: 0;
 }
 .path-chip .path-icon {
   width: 13px;
   height: 13px;
   flex-shrink: 0;
   color: var(--accent);
-  margin-right: 6px;
 }
-.path-chip .seg {
-  white-space: nowrap;
-}
-.path-chip .seg + .seg::before {
-  content: "/";
-  margin: 0 4px;
-  opacity: 0.5;
-}
-.path-chip .seg.end {
-  color: var(--text);
+.path-chip .cn-breadcrumb-page {
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .header-actions {
   margin-left: auto;
@@ -268,21 +267,6 @@ aside h2 {
 .inspector > .pill {
   align-self: flex-start;
 }
-.icon-btn {
-  background: transparent;
-  border: 1px solid var(--border-2);
-  color: var(--dim);
-  padding: 1px 8px;
-  font-size: 14px;
-  line-height: 1.4;
-  border-radius: var(--radius);
-  flex-shrink: 0;
-}
-.icon-btn:hover:not(:disabled) {
-  background: var(--panel-3);
-  color: var(--text);
-  border-color: var(--accent);
-}
 h3 {
   font-size: 11px;
   text-transform: uppercase;
@@ -292,8 +276,7 @@ h3 {
   margin: 12px 0 4px;
 }
 
-input,
-select {
+input {
   background: var(--panel-2);
   color: inherit;
   border: 1px solid var(--border-2);
@@ -304,22 +287,7 @@ select {
     border-color 120ms ease,
     box-shadow 120ms ease;
 }
-select {
-  appearance: none;
-  -webkit-appearance: none;
-  padding-right: 26px;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2393a1b5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 9px center;
-  background-size: 10px;
-}
-option {
-  background: var(--panel-2);
-  color: var(--text);
-}
-input:focus,
-select:focus {
+input:focus {
   outline: none;
   border-color: var(--accent);
   /* shadcn-style focus ring: offset ring in the surface colour */
@@ -330,28 +298,10 @@ select:focus {
 input::placeholder {
   color: var(--faint);
 }
+/* every button is either a shadcn Button (own styles) or a bare text/circle
+   control below — only the pointer cursor is universal */
 button {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius);
-  padding: 6px 12px;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 550;
-  box-shadow: var(--shadow);
-  transition:
-    background 120ms ease,
-    opacity 120ms ease,
-    box-shadow 120ms ease;
-}
-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 84%, #000000);
-  box-shadow: 0 2px 8px var(--accent-glow);
-}
-button:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 button.link {
   background: none;
@@ -367,11 +317,14 @@ button.link {
   display: block;
   min-width: 0;
   flex: 1;
+  /* links are text — the global button drop shadow reads as an underline */
+  box-shadow: none;
 }
 button.link:hover {
   background: none;
   color: var(--accent-hover);
   text-decoration: none;
+  box-shadow: none;
 }
 
 .pill {
@@ -489,43 +442,12 @@ aside.explorer h2 {
   align-items: center;
   justify-content: space-between;
 }
-.view-toggle {
-  display: inline-flex;
-  gap: 4px;
-}
-.view-toggle button {
-  background: transparent;
-  border: 1px solid var(--border-2);
-  color: var(--dim);
-  padding: 1px 7px;
-  font-size: 11px;
-  border-radius: 6px;
-  box-shadow: none;
-  line-height: 1.5;
-}
-.view-toggle button:hover:not(:disabled) {
-  background: var(--panel-2);
-  color: var(--text);
-}
-.view-toggle button.on {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-/* modern sidebar controls: pill inputs, icon-led search */
-aside.explorer input,
-aside.explorer select {
-  border-radius: 999px;
-  padding: 7px 12px;
-}
-aside.explorer select {
-  padding-right: 28px;
-}
-aside.explorer .field input {
-  padding-left: 32px;
-}
+/* modern sidebar controls: icon-led search */
 .field {
   position: relative;
+}
+.field input {
+  padding-left: 32px;
 }
 .field-icon {
   position: absolute;
@@ -546,10 +468,6 @@ aside.explorer .field input {
 .explorer-toolbar .field {
   flex: 1;
   min-width: 0;
-}
-.explorer-toolbar select.type-filter {
-  flex: 0 0 auto;
-  width: 116px;
 }
 aside.explorer > button {
   width: 100%;
@@ -822,6 +740,12 @@ header .index-form {
 .flow-node.dim:hover {
   opacity: 0.75;
 }
+/* the pane paints over React Flow's own canvas default (#141414 dark /
+   transparent light) — pin it to the panel so the canvas matches */
+.react-flow,
+.react-flow__pane.draggable {
+  background: var(--panel);
+}
 .react-flow__controls {
   border: 1px solid var(--border-2);
   border-radius: var(--radius);
@@ -939,10 +863,6 @@ header .index-form {
 }
 
 /* appearance controls */
-.accent-wrap {
-  position: relative;
-  flex-shrink: 0;
-}
 .swatch-btn {
   width: 26px;
   height: 26px;
@@ -963,26 +883,13 @@ header .index-form {
     inset 0 0 0 2px var(--panel),
     0 0 0 3px var(--accent-glow);
 }
-.popover-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 29;
-  background: transparent;
-}
 .accent-pop {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 30;
+  /* container shell (position, ring, animation) comes from the shadcn
+     Popover — only the swatch grid lives here */
   display: grid;
   grid-template-columns: repeat(4, 26px);
   gap: 8px;
   padding: 10px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border-2);
-  border-radius: 12px;
-  box-shadow: var(--shadow-lg);
-  animation: pop-in 140ms cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 .swatch {
   width: 26px;
@@ -1037,16 +944,6 @@ header .index-form {
     transform: none;
   }
 }
-@keyframes pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -1067,6 +964,11 @@ header .index-form {
   height: 13px;
   margin: 0;
   border-width: 2px;
+}
+/* busy spinners sit inside accent-filled shadcn buttons (index / re-index) */
+.cn-button .spinner.mini {
+  border-color: rgb(255 255 255 / 0.35);
+  border-top-color: #fff;
 }
 
 @media (prefers-reduced-motion: reduce) {

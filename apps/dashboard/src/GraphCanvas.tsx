@@ -5,13 +5,14 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  getNodesBounds,
   useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useEffect, useMemo, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import type { GraphEdgeDto, GraphNodeDto } from "./api";
 import { COLOR, layoutGraph } from "./layout";
 
@@ -94,8 +95,10 @@ function FlowView({
   selectedId,
   onSelect,
 }: GraphCanvasProps) {
-  const { setCenter, getViewport } = useReactFlow();
+  const { setCenter, getViewport, setViewport } = useReactFlow();
   const position = useMemo(() => layoutGraph(nodes, edges), [nodes, edges]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const didInit = useRef(false);
 
   // Point the view at the selection — sidebar clicks (impact list, search)
   // must land on the node, not just populate the inspector.
@@ -164,12 +167,32 @@ function FlowView({
       };
     });
 
+  // Initial view: a readable zoom anchored at the top of the graph. Fitting
+  // the whole graph to the screen shrinks big repos into unreadable dots —
+  // clamp the zoom instead and let the user scroll down to explore.
+  // (key={repoId} on GraphCanvas remounts it, so this re-runs per repo)
+  useEffect(() => {
+    if (didInit.current) return;
+    const el = containerRef.current;
+    if (!el || flowNodes.length === 0) return;
+    didInit.current = true;
+    const bounds = getNodesBounds(flowNodes);
+    const pad = 40;
+    // fit the graph's width when it fits, stay within [0.55, 0.9] otherwise
+    const zoom = Math.min(0.9, Math.max(0.55, (el.clientWidth - pad * 2) / bounds.width));
+    setViewport({
+      zoom,
+      x: (el.clientWidth - bounds.width * zoom) / 2 - bounds.x * zoom,
+      y: pad - bounds.y * zoom,
+    });
+  }, [flowNodes, setViewport]);
+
   return (
     <ReactFlow
+      ref={containerRef}
       nodes={flowNodes}
       edges={flowEdges}
       nodeTypes={NODE_TYPES}
-      fitView
       minZoom={0.15}
       colorMode={theme}
       nodesDraggable={false}

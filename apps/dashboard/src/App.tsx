@@ -1,5 +1,32 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { FolderTreeIcon, ListIcon, MoonIcon, SunIcon } from "lucide-react";
 import {
   api,
   type GraphEdgeDto,
@@ -8,6 +35,7 @@ import {
   type Repository,
 } from "./api";
 import { GraphCanvas } from "./GraphCanvas";
+import { CodeModal, type CodeTarget } from "./CodeModal";
 import { COLOR } from "./layout";
 import { NodeInspector } from "./NodeInspector";
 import { TREE_ICONS, treeThemeStyles } from "./theme";
@@ -63,7 +91,8 @@ export function App() {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const [indexing, setIndexing] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [explorerView, setExplorerView] = useState<"tree" | "flat">(() =>
     localStorage.getItem("mcpdg-explorer") === "flat" ? "flat" : "tree",
@@ -75,6 +104,7 @@ export function App() {
   );
   const [accent, setAccent] = useState(() => localStorage.getItem("mcpdg-accent") ?? "");
   const [accentOpen, setAccentOpen] = useState(false);
+  const [code, setCode] = useState<CodeTarget | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -109,6 +139,7 @@ export function App() {
     setQuery("");
     setTypeFilter("");
     setError(null);
+    setCode(null);
   }, [repoId]);
 
   const loadGraph = useCallback(async (id: string) => {
@@ -150,8 +181,8 @@ export function App() {
   );
 
   const reindex = useCallback(async () => {
-    if (!repo || busy) return;
-    setBusy(true);
+    if (!repo || reindexing) return;
+    setReindexing(true);
     setError(null);
     try {
       await api.reindex(repo.id, repo.rootPath);
@@ -159,13 +190,13 @@ export function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setBusy(false);
+      setReindexing(false);
     }
-  }, [repo, busy, loadGraph]);
+  }, [repo, reindexing, loadGraph]);
 
   const runIndex = useCallback(
     async (source: string) => {
-      setBusy(true);
+      setIndexing(true);
       setError(null);
       try {
         const result = await api.indexSource(source);
@@ -176,7 +207,7 @@ export function App() {
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {
-        setBusy(false);
+        setIndexing(false);
       }
     },
     [loadGraph],
@@ -192,6 +223,10 @@ export function App() {
         setTypeFilter("");
       }
       setInspectorOpen(true);
+      // clicking a file anywhere (tree, flat list, canvas card) pops the
+      // code viewer — symbols only fill the inspector
+      if (found?.type === "file" && found.filePath)
+        setCode({ path: found.filePath, startLine: found.startLine, endLine: found.endLine });
       if (found) setSelected(found);
       else
         void api
@@ -246,7 +281,7 @@ export function App() {
         <div className="hero">
           <h2>Index a repository</h2>
           <p className="muted">Enter a local path or a GitHub URL to build the graph.</p>
-          <IndexForm busy={busy} onIndex={runIndex} />
+          <IndexForm busy={indexing} onIndex={runIndex} />
           {error && <div className="error">{error}</div>}
         </div>
       </div>
@@ -256,124 +291,145 @@ export function App() {
     <div className={`app${showInspector ? "" : " inspector-closed"}`}>
       <header>
         <strong className="brand">MCP Dependency Graph</strong>
-        <IndexForm busy={busy} onIndex={runIndex} />
-        <button
-          className="icon-btn"
+        <IndexForm busy={indexing} onIndex={runIndex} />
+        <Button
+          variant="default"
+          size="sm"
           onClick={() => void reindex()}
-          disabled={busy}
+          disabled={reindexing}
           title="Re-index repository"
           aria-label="Re-index repository"
         >
-          {busy ? <span className="spinner mini" /> : <RefreshIcon />}
-        </button>
-        <span className="path-chip mono" title={repo?.rootPath ?? ""}>
-          <svg className="path-icon" viewBox="0 0 16 16" aria-hidden="true">
-            <path
-              d="M1.8 4.2c0-.8.6-1.4 1.4-1.4h3l1.6 1.8h5c.8 0 1.4.6 1.4 1.4v6c0 .8-.6 1.4-1.4 1.4H3.2c-.8 0-1.4-.6-1.4-1.4z"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinejoin="round"
-            />
-          </svg>
-          {/* breadcrumb: full path in faded segments, the repo folder (the
-              app name) emphasised; GitHub clones stage into a hashed temp
-              dir — that segment never shows */}
-          {(repo?.rootPath ?? "")
-            .split(/[\\/]+/)
-            .filter(Boolean)
-            .filter((seg) => !/^[0-9a-f]{8,}$/.test(seg))
-            .map((seg, i, all) => (
-              <span key={`${seg}-${i}`} className={`seg${i === all.length - 1 ? " end" : ""}`}>
-                {seg}
-              </span>
-            ))}
-        </span>
+          {reindexing ? <span className="spinner mini" /> : <RefreshIcon />}
+        </Button>
+        {/* breadcrumb: full path in faded segments, the repo folder (the
+            app name) emphasised; GitHub clones stage into a hashed temp
+            dir — that segment never shows */}
+        <Breadcrumb className="path-chip mono" title={repo?.rootPath ?? ""}>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <svg className="path-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M1.8 4.2c0-.8.6-1.4 1.4-1.4h3l1.6 1.8h5c.8 0 1.4.6 1.4 1.4v6c0 .8-.6 1.4-1.4 1.4H3.2c-.8 0-1.4-.6-1.4-1.4z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </BreadcrumbItem>
+            {(repo?.rootPath ?? "")
+              .split(/[\\/]+/)
+              .filter(Boolean)
+              .filter((seg) => !/^[0-9a-f]{8,}$/.test(seg))
+              .map((seg, i, all) => (
+                <Fragment key={`${seg}-${i}`}>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    {i === all.length - 1 ? (
+                      <BreadcrumbPage>{seg}</BreadcrumbPage>
+                    ) : (
+                      <span>{seg}</span>
+                    )}
+                  </BreadcrumbItem>
+                </Fragment>
+              ))}
+          </BreadcrumbList>
+        </Breadcrumb>
         <span className="header-actions">
-          <button
-            className="icon-btn"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
             title="Toggle dark / light theme"
             aria-label="Toggle theme"
           >
-            {theme === "dark" ? "☀" : "☾"}
-          </button>
-          <span className="accent-wrap">
-            <button
-              className="swatch-btn"
-              style={{ "--swatch": accent || "#5e8bff" } as CSSProperties}
-              onClick={() => setAccentOpen((o) => !o)}
-              title="Accent color"
-              aria-label="Accent color"
-              aria-haspopup="dialog"
-              aria-expanded={accentOpen}
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </Button>
+          <Popover open={accentOpen} onOpenChange={setAccentOpen}>
+            <PopoverTrigger
+              render={
+                <button
+                  className="swatch-btn"
+                  style={{ "--swatch": accent || "#5e8bff" } as CSSProperties}
+                  title="Accent color"
+                  aria-label="Accent color"
+                />
+              }
             />
-            {accentOpen && (
-              <>
-                <div className="popover-backdrop" onClick={() => setAccentOpen(false)} />
-                <div className="accent-pop" role="group" aria-label="Accent colors">
-                  {ACCENTS.map((c) => (
-                    <button
-                      key={c}
-                      className={`swatch${(accent || "#5e8bff").toLowerCase() === c ? " active" : ""}`}
-                      style={{ "--c": c } as CSSProperties}
-                      onClick={() => {
-                        setAccent(c);
-                        setAccentOpen(false);
-                      }}
-                      aria-label={`Accent ${c}`}
-                    />
-                  ))}
-                  <button
-                    className="swatch reset"
-                    onClick={() => {
-                      setAccent("");
-                      setAccentOpen(false);
-                    }}
-                    title="Reset accent"
-                  >
-                    ↺
-                  </button>
-                </div>
-              </>
-            )}
-          </span>
+            <PopoverContent align="end" className="accent-pop">
+              {ACCENTS.map((c) => (
+                <button
+                  key={c}
+                  className={`swatch${(accent || "#5e8bff").toLowerCase() === c ? " active" : ""}`}
+                  style={{ "--c": c } as CSSProperties}
+                  onClick={() => {
+                    setAccent(c);
+                    setAccentOpen(false);
+                  }}
+                  aria-label={`Accent ${c}`}
+                />
+              ))}
+              <button
+                className="swatch reset"
+                onClick={() => {
+                  setAccent("");
+                  setAccentOpen(false);
+                }}
+                title="Reset accent"
+              >
+                ↺
+              </button>
+            </PopoverContent>
+          </Popover>
         </span>
       </header>
 
       <main>
         <aside className="explorer">
-          <select
-            value={repoId ?? ""}
-            onChange={(e) => switchRepo(e.target.value)}
-            aria-label="Repository"
-          >
-            {repositories.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-between font-normal"
+                />
+              }
+            >
+              {repo?.name ?? "Repository"}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[var(--anchor-width)]">
+              <DropdownMenuRadioGroup
+                value={repoId ?? ""}
+                onValueChange={(id) => id && switchRepo(id)}
+              >
+                {repositories.map((r) => (
+                  <DropdownMenuRadioItem key={r.id} value={r.id}>
+                    {r.name}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <h2>
             Explorer
-            <span className="view-toggle">
-              <button
-                className={explorerView === "tree" ? "on" : ""}
-                onClick={() => setExplorerView("tree")}
-                title="File tree"
-                aria-pressed={explorerView === "tree"}
-              >
-                🗂
-              </button>
-              <button
-                className={explorerView === "flat" ? "on" : ""}
-                onClick={() => setExplorerView("flat")}
-                title="Flat list"
-                aria-pressed={explorerView === "flat"}
-              >
-                ☰
-              </button>
-            </span>
+            <ToggleGroup
+              value={[explorerView]}
+              onValueChange={(v) => {
+                const picked = v[0];
+                if (picked === "tree" || picked === "flat") setExplorerView(picked);
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <ToggleGroupItem value="tree" title="File tree" aria-label="File tree">
+                <FolderTreeIcon />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="flat" title="Flat list" aria-label="Flat list">
+                <ListIcon />
+              </ToggleGroupItem>
+            </ToggleGroup>
           </h2>
           {/* one organized filter bar: search flexes, type sits fixed beside
               it — both the same pill height */}
@@ -389,26 +445,39 @@ export function App() {
                   strokeLinecap="round"
                 />
               </svg>
-              <input
+              <Input
                 placeholder="Search nodes…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 aria-label="Search nodes"
               />
             </div>
-            <select
-              className="type-filter"
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              aria-label="Node type"
-            >
-              <option value="">All types</option>
-              {NODE_TYPES.filter((t) => nodes.some((n) => n.type === t)).map((t) => (
-                <option key={t} value={t}>
-                  {t.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-[128px] justify-between font-normal"
+                  />
+                }
+              >
+                {typeFilter ? typeFilter.replace(/_/g, " ") : "All types"}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[var(--anchor-width)]">
+                <DropdownMenuRadioGroup
+                  value={typeFilter}
+                  onValueChange={(t) => setTypeFilter(t ?? "")}
+                >
+                  <DropdownMenuRadioItem value="">All types</DropdownMenuRadioItem>
+                  {NODE_TYPES.filter((t) => nodes.some((n) => n.type === t)).map((t) => (
+                    <DropdownMenuRadioItem key={t} value={t}>
+                      {t.replace(/_/g, " ")}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {explorerView === "flat" ? (
@@ -441,9 +510,14 @@ export function App() {
           )}
           {error && <div className="error banner">{error}</div>}
           {showPeek && (
-            <button className="peek" onClick={() => setInspectorOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="peek"
+              onClick={() => setInspectorOpen(true)}
+            >
               ‹ Details
-            </button>
+            </Button>
           )}
           {visibleNodes.length === 0 ? (
             <div className="center muted">No nodes match the current filters.</div>
@@ -466,9 +540,12 @@ export function App() {
             node={selected}
             onSelect={selectNode}
             onCollapse={() => setInspectorOpen(false)}
+            onOpenCode={setCode}
           />
         )}
       </main>
+
+      {code && <CodeModal repoId={repoId ?? ""} code={code} onClose={() => setCode(null)} />}
 
       <footer className="status">
         {status ? (
@@ -583,21 +660,21 @@ function IndexForm({
         if (value.trim()) void onIndex(value.trim());
       }}
     >
-      <input
+      <Input
         placeholder="Path or GitHub URL…"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         aria-label="Repository source"
       />
-      <button
+      <Button
         type="submit"
-        className="icon-btn"
+        size="sm"
         disabled={busy || !value.trim()}
         title="Index repository"
         aria-label="Index repository"
       >
         {busy ? <span className="spinner mini" /> : <PlusIcon />}
-      </button>
+      </Button>
     </form>
   );
 }
