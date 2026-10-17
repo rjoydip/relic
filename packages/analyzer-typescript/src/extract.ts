@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
-import type { Diagnostic, GraphNode, NodeType } from "@skein/graph-core";
+import type { Diagnostic, GraphNode, NodeType } from "@relic/graph-core";
 import type { RepositoryContext } from "./discovery";
 import { IGNORED_DIRS, SUPPORTED_EXTENSIONS, extOf, isTestFile, sha1 } from "./discovery";
 import {

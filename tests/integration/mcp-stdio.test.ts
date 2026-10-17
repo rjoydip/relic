@@ -33,8 +33,8 @@ beforeEach(async () => {
     cwd: PROJECT_ROOT,
     env: {
       ...process.env,
-      SKEIN_DB: join(dbDir, "graph.db"),
-      SKEIN_REPOSITORY: fixture.root,
+      RELIC_DB: join(dbDir, "graph.db"),
+      RELIC_REPOSITORY: fixture.root,
     } as Record<string, string>,
     stderr: "ignore",
   });

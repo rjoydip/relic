@@ -4,9 +4,9 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { Hono } from "hono";
-import { GraphError } from "@skein/graph-core";
-import type { EdgeType, NodeType } from "@skein/graph-core";
-import { openGraph, repositoryIdFor, type OpenGraph } from "@skein/indexer";
+import { GraphError } from "@relic/graph-core";
+import type { EdgeType, NodeType } from "@relic/graph-core";
+import { openGraph, repositoryIdFor, type OpenGraph } from "@relic/indexer";
 
 export interface ApiOptions {
   dbPath: string;
@@ -34,7 +34,7 @@ export function parseGitHubUrl(raw: string): string | null {
 function ensureGitHubClone(url: string): string {
   const dir = join(
     tmpdir(),
-    "skein-github",
+    "relic-github",
     createHash("sha1").update(url).digest("hex").slice(0, 12),
   );
   if (!existsSync(dir)) {

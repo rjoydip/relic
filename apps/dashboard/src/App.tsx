@@ -95,34 +95,34 @@ export function App() {
   const [reindexing, setReindexing] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [explorerView, setExplorerView] = useState<"tree" | "flat">(() =>
-    localStorage.getItem("skein-explorer") === "flat" ? "flat" : "tree",
+    localStorage.getItem("relic-explorer") === "flat" ? "flat" : "tree",
   );
   const [error, setError] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [theme, setTheme] = useState<"dark" | "light">(() =>
-    localStorage.getItem("skein-theme") === "light" ? "light" : "dark",
+    localStorage.getItem("relic-theme") === "light" ? "light" : "dark",
   );
-  const [accent, setAccent] = useState(() => localStorage.getItem("skein-accent") ?? "");
+  const [accent, setAccent] = useState(() => localStorage.getItem("relic-accent") ?? "");
   const [accentOpen, setAccentOpen] = useState(false);
   const [code, setCode] = useState<CodeTarget | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("skein-theme", theme);
+    localStorage.setItem("relic-theme", theme);
   }, [theme]);
 
   useEffect(() => {
     if (accent) {
       document.documentElement.style.setProperty("--accent", accent);
-      localStorage.setItem("skein-accent", accent);
+      localStorage.setItem("relic-accent", accent);
     } else {
       document.documentElement.style.removeProperty("--accent");
-      localStorage.removeItem("skein-accent");
+      localStorage.removeItem("relic-accent");
     }
   }, [accent]);
 
   useEffect(() => {
-    localStorage.setItem("skein-explorer", explorerView);
+    localStorage.setItem("relic-explorer", explorerView);
   }, [explorerView]);
 
   const repo = repositories.find((r) => r.id === repoId) ?? null;
@@ -290,7 +290,7 @@ export function App() {
   return (
     <div className={`app${showInspector ? "" : " inspector-closed"}`}>
       <header>
-        <strong className="brand">Skein</strong>
+        <strong className="brand">Relic</strong>
         <IndexForm busy={indexing} onIndex={runIndex} />
         <Button
           variant="default"

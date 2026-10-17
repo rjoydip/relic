@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import type { Diagnostic, GraphRepository, RepositoryMeta } from "@skein/graph-core";
-import { GraphService } from "@skein/graph-core";
-import { DatabaseClient, SqliteGraphRepository, type ReplaceGraphInput } from "@skein/database";
+import type { Diagnostic, GraphRepository, RepositoryMeta } from "@relic/graph-core";
+import { GraphService } from "@relic/graph-core";
+import { DatabaseClient, SqliteGraphRepository, type ReplaceGraphInput } from "@relic/database";
 import {
   extractFile,
   fileId,
@@ -13,7 +13,7 @@ import {
   type ExtractedFile,
   type RefInfo,
   type RefLookup,
-} from "@skein/analyzer-typescript";
+} from "@relic/analyzer-typescript";
 
 export interface IndexResult {
   repositoryId: string;
@@ -177,5 +177,5 @@ export function openGraph(dbPath: string): OpenGraph {
   };
 }
 
-export { makeRepositoryContext, repositoryIdFor } from "@skein/analyzer-typescript";
-export type { GraphRepository, NodeFilter } from "@skein/graph-core";
+export { makeRepositoryContext, repositoryIdFor } from "@relic/analyzer-typescript";
+export type { GraphRepository, NodeFilter } from "@relic/graph-core";

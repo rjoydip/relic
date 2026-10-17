@@ -7,8 +7,8 @@ import type {
   RepositoryMeta,
   TraversalRequest,
   TraversalStep,
-} from "@skein/graph-core";
-import type { GraphRepository } from "@skein/graph-core";
+} from "@relic/graph-core";
+import type { GraphRepository } from "@relic/graph-core";
 import type { DatabaseClient } from "./client";
 
 type SqlParam = string | number | null;

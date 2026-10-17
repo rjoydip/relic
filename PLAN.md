@@ -1,8 +1,8 @@
-# Skein — Detailed Implementation Plan
+# Relic — Detailed Implementation Plan
 
 ## 1. Project vision
 
-Build a TypeScript-based **Skein** application that understands how an application's code, APIs, database, tests, frontend, and deployments are connected.
+Build a TypeScript-based **Relic** application that understands how an application's code, APIs, database, tests, frontend, and deployments are connected.
 
 Instead of exposing isolated repository tools, the MCP server constructs a refreshable dependency graph that coding agents can query to understand the impact of code changes.
 
@@ -336,9 +336,9 @@ Adapt the configuration keys to the specific client. Paths must be real and the 
   "mcpServers": {
     "dependency-graph": {
       "command": "bun",
-      "args": ["run", "/absolute/path/to/skein/apps/mcp-server/src/index.ts"],
+      "args": ["run", "/absolute/path/to/relic/apps/mcp-server/src/index.ts"],
       "env": {
-        "SKEIN_REPOSITORY": "/absolute/path/to/starter-hono"
+        "RELIC_REPOSITORY": "/absolute/path/to/starter-hono"
       }
     }
   }
@@ -365,7 +365,7 @@ The dashboard is a first-class application and uses the same graph services as t
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ Skein    Repository: starter-hono    Re-index │
+│ Relic    Repository: starter-hono    Re-index │
 ├──────────────┬──────────────────────────────┬────────────────┤
 │ Explorer     │                              │ Details        │
 │              │       Interactive Graph      │                │
@@ -595,7 +595,7 @@ GitHub Actions should run the same gates as local development, use pinned tool v
 ## 15. Recommended monorepo structure
 
 ```text
-skein/
+relic/
 ├── apps/
 │   ├── mcp-server/
 │   │   └── src/

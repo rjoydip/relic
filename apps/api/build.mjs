@@ -1,5 +1,5 @@
 // Bundle the two published entries (dashboard CLI + MCP stdio server) into
-// apps/api/dist. Workspace packages (@skein/*) get inlined; npm dependencies
+// apps/api/dist. Workspace packages (@relic/*) get inlined; npm dependencies
 // stay external and install with the package. Run from apps/api.
 import { existsSync, cpSync, rmSync } from "node:fs";
 import { build } from "esbuild";

@@ -1,5 +1,5 @@
-import type { Diagnostic, EdgeType, Evidence, GraphEdge } from "@skein/graph-core";
-import { CONFIDENCE } from "@skein/graph-core";
+import type { Diagnostic, EdgeType, Evidence, GraphEdge } from "@relic/graph-core";
+import { CONFIDENCE } from "@relic/graph-core";
 import type { ExtractedFile, RefInfo, RefLookup } from "./extract";
 import type { RepositoryContext } from "./discovery";
 import { databaseTableId, edgeId, fileId, repositoryNodeId, routeId } from "./ids";

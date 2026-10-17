@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { DatabaseClient, SqliteGraphRepository } from "@skein/database";
-import type { GraphEdge, GraphNode } from "@skein/graph-core";
+import { DatabaseClient, SqliteGraphRepository } from "@relic/database";
+import type { GraphEdge, GraphNode } from "@relic/graph-core";
 import { cleanup, tempDir } from "../helpers";
 
 let dbDir: string;

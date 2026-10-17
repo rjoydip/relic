@@ -1,7 +1,7 @@
 {
-  "name": "skein-mcp",
+  "name": "relic-graph",
   "version": "0.1.0",
-  "description": "Skein — codebase dependency graph: MCP server, incremental TypeScript indexer, and visual dashboard",
+  "description": "Relic — codebase dependency graph: MCP server, incremental TypeScript indexer, and visual dashboard",
   "keywords": [
     "code-graph",
     "dependency-graph",
@@ -10,8 +10,8 @@
     "typescript"
   ],
   "bin": {
-    "skein": "./dist/cli.js",
-    "skein-mcp": "./dist/index.js"
+    "relic": "./dist/cli.js",
+    "relic-mcp": "./dist/index.js"
   },
   "files": [
     "dist"
@@ -29,10 +29,10 @@
     "zod": "^4.6.6"
   },
   "devDependencies": {
-    "@skein/analyzer-typescript": "workspace:*",
-    "@skein/graph-core": "workspace:*",
-    "@skein/indexer": "workspace:*",
-    "@skein/mcp-server": "workspace:*"
+    "@relic/analyzer-typescript": "workspace:*",
+    "@relic/graph-core": "workspace:*",
+    "@relic/indexer": "workspace:*",
+    "@relic/mcp-server": "workspace:*"
   },
   "engines": {
     "node": ">=23.4.0"

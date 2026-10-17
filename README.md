@@ -1,4 +1,4 @@
-# Skein
+# Relic
 
 Static dependency-graph engine for TypeScript repositories, exposed three ways: an MCP server (for coding agents), a Hono HTTP API, and a React Flow dashboard.
 
@@ -14,7 +14,7 @@ packages/
   indexer/                incremental indexing (hash change detection, importer re-expansion)
 apps/
   mcp-server/             MCP stdio server: 10 tools, 3 resources, 2 prompts
-  api/                    Hono API + the publishable package: `skein` CLI and `skein-mcp` bins
+  api/                    Hono API + the publishable package: `relic` CLI and `relic-mcp` bins
   dashboard/              React + React Flow graph explorer
 tests/
   fixtures/starter-hono/  deterministic fixture (critical scenario: UserController → UserService.updateUser → UserRepository.update)
@@ -37,13 +37,13 @@ bun run ci          # format:check && lint && typecheck && test:coverage && buil
 The published package ships both binaries and the prebuilt dashboard; it needs Node ≥ 23.4 (`node:sqlite`) or bun:
 
 ```sh
-npm install -g skein-mcp   # provides `skein` and `skein-mcp`
-# or run ad hoc: npx skein-mcp
+npm install -g relic-graph   # provides `relic` and `relic-mcp`
+# or run ad hoc: npx relic-graph
 ```
 
 ## MCP server (stdio)
 
-On startup the server auto-indexes `SKEIN_ROOT` (or `SKEIN_REPOSITORY`, or the launch directory), so tools answer immediately; `index_repository` stays available for other projects.
+On startup the server auto-indexes `RELIC_ROOT` (or `RELIC_REPOSITORY`, or the launch directory), so tools answer immediately; `index_repository` stays available for other projects.
 
 Tools: `index_repository`, `search_symbols`, `get_symbol_details`, `find_dependents`, `find_dependencies`, `analyze_impact`, `get_dependency_path`, `find_related_tests`, `analyze_git_diff`, `get_graph_summary`.
 
@@ -52,16 +52,16 @@ Example client config (Claude Code / Cursor / Cline / Windsurf all use the same 
 ```json
 {
   "mcpServers": {
-    "skein": {
+    "relic": {
       "command": "npx",
-      "args": ["-y", "skein-mcp"],
-      "env": { "SKEIN_REPOSITORY": "/absolute/path/to/your/repo" }
+      "args": ["-y", "relic-graph"],
+      "env": { "RELIC_REPOSITORY": "/absolute/path/to/your/repo" }
     }
   }
 }
 ```
 
-Optional env: `SKEIN_ROOT` (project to auto-index at startup), `SKEIN_DB` (graph SQLite path, default `$TMPDIR/skein.db`).
+Optional env: `RELIC_ROOT` (project to auto-index at startup), `RELIC_DB` (graph SQLite path, default `$TMPDIR/relic.db`).
 
 Ask things like:
 
@@ -72,15 +72,15 @@ Ask things like:
 ## Dashboard
 
 ```sh
-skein                          # index cwd, serve API + UI, open the browser
-skein /path/to/repo            # index a specific project
-skein --port 9000 --no-open    # options: --port, --db, --no-open
-skein index /path/to/repo      # one-shot for agents/scripts: index, print
+relic                          # index cwd, serve API + UI, open the browser
+relic /path/to/repo            # index a specific project
+relic --port 9000 --no-open    # options: --port, --db, --no-open
+relic index /path/to/repo      # one-shot for agents/scripts: index, print
                                # IndexResult JSON on stdout, exit non-zero on
                                # failure (logs go to stderr)
 ```
 
-The MCP server is the primary agent interface; `skein index` gives agents and CI a headless way to bootstrap the same graph DB the dashboard and API read.
+The MCP server is the primary agent interface; `relic index` gives agents and CI a headless way to bootstrap the same graph DB the dashboard and API read.
 
 The dashboard's index bar (empty state and header) accepts a local path or a GitHub URL — GitHub sources are shallow-cloned into a temp dir (re-pulled on re-index) and never run code.
 

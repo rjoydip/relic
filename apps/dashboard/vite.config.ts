@@ -6,7 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 // The e2e run points this at its own isolated API instance (see
 // playwright.config.ts); the dev default stays the local dev API.
-const apiTarget = process.env.SKEIN_API_URL ?? "http://127.0.0.1:8787";
+const apiTarget = process.env.RELIC_API_URL ?? "http://127.0.0.1:8787";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -27,7 +27,7 @@ export default defineConfig({
               res.end(
                 JSON.stringify({
                   error: "API_UNAVAILABLE",
-                  message: `Graph API is not running at ${apiTarget} — start it with \`bun run dev:api\`, or run \`skein\` for the bundled dashboard.`,
+                  message: `Graph API is not running at ${apiTarget} — start it with \`bun run dev:api\`, or run \`relic\` for the bundled dashboard.`,
                 }),
               );
             }

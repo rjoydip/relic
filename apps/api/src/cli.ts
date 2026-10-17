@@ -8,11 +8,11 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { buildApp } from "./app";
 
 /**
- * skein — one command for the dashboard: indexes the given path (default:
+ * relic — one command for the dashboard: indexes the given path (default:
  * cwd) into the shared graph DB, serves the API + built UI, opens a browser.
  *
- *   skein [path] [--port 8787] [--db <graph.db>] [--no-open]   serve (default)
- *   skein index [path] [--db <graph.db>]                        one-shot for
+ *   relic [path] [--port 8787] [--db <graph.db>] [--no-open]   serve (default)
+ *   relic index [path] [--db <graph.db>]                        one-shot for
  *                                                                agents: index,
  *                                                                print JSON to
  *                                                                stdout, exit
@@ -34,7 +34,7 @@ function parseArgs(argv: string[]): {
     mode: "serve",
     root: process.cwd(),
     port: Number(process.env.PORT ?? 8787),
-    dbPath: process.env.SKEIN_DB ?? join(tmpdir(), "skein.db"),
+    dbPath: process.env.RELIC_DB ?? join(tmpdir(), "relic.db"),
     open: true,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -111,6 +111,6 @@ if (mode === "index") {
   }
 
   serve({ fetch: app.fetch, port, hostname: "127.0.0.1" });
-  console.error(`skein running at http://127.0.0.1:${port}`);
+  console.error(`relic running at http://127.0.0.1:${port}`);
   if (open) openBrowser(`http://127.0.0.1:${port}`);
 }

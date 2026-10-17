@@ -1,5 +1,5 @@
 {
-  "name": "@skein/database",
+  "name": "@relic/database",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -7,6 +7,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@skein/graph-core": "workspace:*"
+    "@relic/graph-core": "workspace:*"
   }
 }

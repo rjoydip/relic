@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { repositoryIdFor } from "@skein/indexer";
+import { repositoryIdFor } from "@relic/indexer";
 import { buildApp } from "../../apps/api/src/app";
 import { cleanup, copyFixture, json, tempDir } from "../helpers";
 

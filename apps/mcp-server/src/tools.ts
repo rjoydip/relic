@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GraphNode, GraphService, Indexer, SqliteGraphRepository } from "./deps";
-import { GraphError } from "@skein/graph-core";
+import { GraphError } from "@relic/graph-core";
 import { changedRanges, coerceNodeType, coerceRepositoryId, symbolsForRanges } from "./helpers";
 import { z } from "zod";
 
@@ -30,7 +30,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   const { graph, indexer, repository } = deps;
 
   const repoId = (input?: string): string => {
-    const path = input ?? process.env.SKEIN_REPOSITORY;
+    const path = input ?? process.env.RELIC_REPOSITORY;
     const id = coerceRepositoryId(
       path,
       (candidate) => repository.getRepository(candidate) !== null,
@@ -86,7 +86,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
         repository: z
           .string()
           .optional()
-          .describe("Path to the repository root (defaults to SKEIN_REPOSITORY)"),
+          .describe("Path to the repository root (defaults to RELIC_REPOSITORY)"),
         revision: z
           .string()
           .optional()
@@ -95,9 +95,9 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     },
     async ({ repository: path, revision }) =>
       run(() => {
-        const root = path ?? process.env.SKEIN_REPOSITORY;
+        const root = path ?? process.env.RELIC_REPOSITORY;
         if (!root)
-          throw new GraphError("INVALID_INPUT", "repository is required (or set SKEIN_REPOSITORY)");
+          throw new GraphError("INVALID_INPUT", "repository is required (or set RELIC_REPOSITORY)");
         return indexer.index(root, revision !== undefined ? { revision } : {});
       }),
   );
@@ -307,7 +307,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   );
 
   // Resources.
-  const defaultRepo = (): string => repoId(process.env.SKEIN_REPOSITORY);
+  const defaultRepo = (): string => repoId(process.env.RELIC_REPOSITORY);
   server.registerResource(
     "repository-summary",
     "graph://repository/summary",

@@ -4,7 +4,7 @@ import {
   resolveImport,
   toRepoRelative,
   walkRepository,
-} from "@skein/analyzer-typescript";
+} from "@relic/analyzer-typescript";
 import { FIXTURE_ROOT } from "../helpers";
 
 const repo = makeRepositoryContext(FIXTURE_ROOT);
