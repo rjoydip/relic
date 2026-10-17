@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
-import type { Diagnostic, GraphEdge, GraphNode } from "@mcpdg/graph-core";
+import type { Diagnostic, GraphEdge, GraphNode } from "@skein/graph-core";
 
 export const SUPPORTED_EXTENSIONS = new Set([
   ".ts",

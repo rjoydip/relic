@@ -1,16 +1,18 @@
-#!/usr/bin/env bun
-import { existsSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { serveStatic } from "hono/bun";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { buildApp } from "./app";
 
 /**
- * mcpdg — one command for the dashboard: indexes the given path (default:
+ * skein — one command for the dashboard: indexes the given path (default:
  * cwd) into the shared graph DB, serves the API + built UI, opens a browser.
  *
- *   mcpdg [path] [--port 8787] [--db <graph.db>] [--no-open]   serve (default)
- *   mcpdg index [path] [--db <graph.db>]                        one-shot for
+ *   skein [path] [--port 8787] [--db <graph.db>] [--no-open]   serve (default)
+ *   skein index [path] [--db <graph.db>]                        one-shot for
  *                                                                agents: index,
  *                                                                print JSON to
  *                                                                stdout, exit
@@ -32,7 +34,7 @@ function parseArgs(argv: string[]): {
     mode: "serve",
     root: process.cwd(),
     port: Number(process.env.PORT ?? 8787),
-    dbPath: process.env.MCP_GRAPH_DB ?? join(tmpdir(), "mcpdg-graph.db"),
+    dbPath: process.env.SKEIN_DB ?? join(tmpdir(), "skein.db"),
     open: true,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -53,7 +55,19 @@ function openBrowser(url: string): void {
       : process.platform === "darwin"
         ? ["open", url]
         : ["xdg-open", url];
-  Bun.spawn(argv, { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+  spawn(argv[0]!, argv.slice(1), { stdio: "ignore", detached: true }).unref();
+}
+
+/** Prebuilt dashboard: bundled at dist/dashboard, or apps/dashboard/dist in dev. */
+function dashboardDir(): string | null {
+  const here = dirname(fileURLToPath(import.meta.url));
+  for (const candidate of [
+    join(here, "dashboard"), // published: <pkg>/dist/dashboard
+    join(here, "..", "..", "dashboard", "dist"), // dev: apps/dashboard/dist
+  ]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
 }
 
 const { mode, root, port, dbPath, open } = parseArgs(process.argv.slice(2));
@@ -82,15 +96,13 @@ if (mode === "index") {
     console.error(`auto-index skipped for ${root}:`, err instanceof Error ? err.message : err);
   }
 
-  // ponytail: serves the prebuilt dashboard; run `bun run build` once so
-  // apps/dashboard/dist exists. Swap for vite dev middleware if HMR matters.
-  const dist = join(import.meta.dir, "..", "..", "dashboard", "dist");
-  if (existsSync(dist)) {
+  const dist = dashboardDir();
+  if (dist) {
     app.use("/assets/*", serveStatic({ root: dist }));
     app.get(
       "/",
       () =>
-        new Response(Bun.file(join(dist, "index.html")), {
+        new Response(readFileSync(join(dist, "index.html")), {
           headers: { "content-type": "text/html; charset=utf-8" },
         }),
     );
@@ -98,7 +110,7 @@ if (mode === "index") {
     console.error("dashboard not built — run `bun run build` (serving API only)");
   }
 
-  Bun.serve({ port, hostname: "127.0.0.1", fetch: app.fetch });
-  console.error(`mcpdg running at http://127.0.0.1:${port}`);
+  serve({ fetch: app.fetch, port, hostname: "127.0.0.1" });
+  console.error(`skein running at http://127.0.0.1:${port}`);
   if (open) openBrowser(`http://127.0.0.1:${port}`);
 }

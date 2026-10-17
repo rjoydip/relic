@@ -1,14 +1,40 @@
 {
-  "name": "@mcpdg/api",
+  "name": "skein-mcp",
   "version": "0.1.0",
+  "description": "Skein — codebase dependency graph: MCP server, incremental TypeScript indexer, and visual dashboard",
+  "keywords": [
+    "code-graph",
+    "dependency-graph",
+    "mcp",
+    "static-analysis",
+    "typescript"
+  ],
   "bin": {
-    "mcpdg": "./src/cli.ts"
+    "skein": "./dist/cli.js",
+    "skein-mcp": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "type": "module",
-  "main": "src/index.ts",
+  "scripts": {
+    "build": "node build.mjs",
+    "prepublishOnly": "npm run build"
+  },
   "dependencies": {
-    "@mcpdg/graph-core": "workspace:*",
-    "@mcpdg/indexer": "workspace:*",
-    "hono": "^4.9.6"
+    "@hono/node-server": "^2.1.5",
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "hono": "^4.9.6",
+    "typescript": "^5.9.2",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@skein/analyzer-typescript": "workspace:*",
+    "@skein/graph-core": "workspace:*",
+    "@skein/indexer": "workspace:*",
+    "@skein/mcp-server": "workspace:*"
+  },
+  "engines": {
+    "node": ">=23.4.0"
   }
 }

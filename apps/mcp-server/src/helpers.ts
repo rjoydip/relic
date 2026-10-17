@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
-import type { GraphNode, NodeType } from "@mcpdg/graph-core";
-import { GraphError } from "@mcpdg/graph-core";
-import { repositoryIdFor } from "@mcpdg/analyzer-typescript";
+import type { GraphNode, NodeType } from "@skein/graph-core";
+import { GraphError } from "@skein/graph-core";
+import { repositoryIdFor } from "@skein/analyzer-typescript";
 
 export interface ChangedRange {
   filePath: string;

@@ -1,5 +1,5 @@
 {
-  "name": "@mcpdg/indexer",
+  "name": "@skein/indexer",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -7,8 +7,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@mcpdg/analyzer-typescript": "workspace:*",
-    "@mcpdg/database": "workspace:*",
-    "@mcpdg/graph-core": "workspace:*"
+    "@skein/analyzer-typescript": "workspace:*",
+    "@skein/database": "workspace:*",
+    "@skein/graph-core": "workspace:*"
   }
 }

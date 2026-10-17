@@ -95,34 +95,34 @@ export function App() {
   const [reindexing, setReindexing] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [explorerView, setExplorerView] = useState<"tree" | "flat">(() =>
-    localStorage.getItem("mcpdg-explorer") === "flat" ? "flat" : "tree",
+    localStorage.getItem("skein-explorer") === "flat" ? "flat" : "tree",
   );
   const [error, setError] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [theme, setTheme] = useState<"dark" | "light">(() =>
-    localStorage.getItem("mcpdg-theme") === "light" ? "light" : "dark",
+    localStorage.getItem("skein-theme") === "light" ? "light" : "dark",
   );
-  const [accent, setAccent] = useState(() => localStorage.getItem("mcpdg-accent") ?? "");
+  const [accent, setAccent] = useState(() => localStorage.getItem("skein-accent") ?? "");
   const [accentOpen, setAccentOpen] = useState(false);
   const [code, setCode] = useState<CodeTarget | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("mcpdg-theme", theme);
+    localStorage.setItem("skein-theme", theme);
   }, [theme]);
 
   useEffect(() => {
     if (accent) {
       document.documentElement.style.setProperty("--accent", accent);
-      localStorage.setItem("mcpdg-accent", accent);
+      localStorage.setItem("skein-accent", accent);
     } else {
       document.documentElement.style.removeProperty("--accent");
-      localStorage.removeItem("mcpdg-accent");
+      localStorage.removeItem("skein-accent");
     }
   }, [accent]);
 
   useEffect(() => {
-    localStorage.setItem("mcpdg-explorer", explorerView);
+    localStorage.setItem("skein-explorer", explorerView);
   }, [explorerView]);
 
   const repo = repositories.find((r) => r.id === repoId) ?? null;
@@ -290,7 +290,7 @@ export function App() {
   return (
     <div className={`app${showInspector ? "" : " inspector-closed"}`}>
       <header>
-        <strong className="brand">MCP Dependency Graph</strong>
+        <strong className="brand">Skein</strong>
         <IndexForm busy={indexing} onIndex={runIndex} />
         <Button
           variant="default"

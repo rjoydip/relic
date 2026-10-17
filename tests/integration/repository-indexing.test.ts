@@ -1,8 +1,8 @@
 import { appendFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import type { GraphNode } from "@mcpdg/graph-core";
-import { openGraph, repositoryIdFor, type OpenGraph } from "@mcpdg/indexer";
+import type { GraphNode } from "@skein/graph-core";
+import { openGraph, repositoryIdFor, type OpenGraph } from "@skein/indexer";
 import { copyFixture, cleanup, tempDir } from "../helpers";
 
 let fixture: { root: string; cleanup: () => void };

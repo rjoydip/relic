@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { makeRepositoryContext, walkRepository } from "@mcpdg/analyzer-typescript";
-import { extractFile, relate, type RefInfo, type RefLookup } from "@mcpdg/analyzer-typescript";
+import { makeRepositoryContext, walkRepository } from "@skein/analyzer-typescript";
+import { extractFile, relate, type RefInfo, type RefLookup } from "@skein/analyzer-typescript";
 import { FIXTURE_ROOT } from "../../helpers";
 
 const repo = makeRepositoryContext(FIXTURE_ROOT);

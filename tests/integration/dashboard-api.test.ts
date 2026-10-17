@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { repositoryIdFor } from "@mcpdg/indexer";
+import { repositoryIdFor } from "@skein/indexer";
 import { buildApp, parseGitHubUrl } from "../../apps/api/src/app";
 import { cleanup, copyFixture, FIXTURE_ROOT, json, tempDir } from "../helpers";
 

@@ -1,5 +1,5 @@
 {
-  "name": "@mcpdg/analyzer-typescript",
+  "name": "@skein/analyzer-typescript",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@mcpdg/graph-core": "workspace:*",
+    "@skein/graph-core": "workspace:*",
     "typescript": "^5.9.2"
   }
 }

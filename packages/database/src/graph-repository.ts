@@ -7,8 +7,8 @@ import type {
   RepositoryMeta,
   TraversalRequest,
   TraversalStep,
-} from "@mcpdg/graph-core";
-import type { GraphRepository } from "@mcpdg/graph-core";
+} from "@skein/graph-core";
+import type { GraphRepository } from "@skein/graph-core";
 import type { DatabaseClient } from "./client";
 
 type SqlParam = string | number | null;

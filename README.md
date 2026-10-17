@@ -1,4 +1,4 @@
-# MCP Dependency Graph
+# Skein
 
 Static dependency-graph engine for TypeScript repositories, exposed three ways: an MCP server (for coding agents), a Hono HTTP API, and a React Flow dashboard.
 
@@ -14,7 +14,7 @@ packages/
   indexer/                incremental indexing (hash change detection, importer re-expansion)
 apps/
   mcp-server/             MCP stdio server: 10 tools, 3 resources, 2 prompts
-  api/                    Hono API for the dashboard (allowed-roots enforced)
+  api/                    Hono API + the publishable package: `skein` CLI and `skein-mcp` bins
   dashboard/              React + React Flow graph explorer
 tests/
   fixtures/starter-hono/  deterministic fixture (critical scenario: UserController → UserService.updateUser → UserRepository.update)
@@ -28,17 +28,22 @@ bun install
 bun run typecheck   # tsc (3 projects)
 bun run lint        # oxlint --deny-warnings
 bun run test        # bun test
-bun run build       # tsc + vite build apps/dashboard
+bun run build       # tsc + vite dashboard + esbuild bundle (apps/api/dist)
 bun run ci          # format:check && lint && typecheck && test:coverage && build
+```
+
+## Install
+
+The published package ships both binaries and the prebuilt dashboard; it needs Node ≥ 23.4 (`node:sqlite`) or bun:
+
+```sh
+npm install -g skein-mcp   # provides `skein` and `skein-mcp`
+# or run ad hoc: npx skein-mcp
 ```
 
 ## MCP server (stdio)
 
-```sh
-MCP_GRAPH_REPOSITORY=/absolute/path/to/repo bun run apps/mcp-server/src/index.ts
-```
-
-On startup the server auto-indexes `MCP_GRAPH_ROOT` (or `MCP_GRAPH_REPOSITORY`, or the launch directory), so tools answer immediately; `index_repository` stays available for other projects.
+On startup the server auto-indexes `SKEIN_ROOT` (or `SKEIN_REPOSITORY`, or the launch directory), so tools answer immediately; `index_repository` stays available for other projects.
 
 Tools: `index_repository`, `search_symbols`, `get_symbol_details`, `find_dependents`, `find_dependencies`, `analyze_impact`, `get_dependency_path`, `find_related_tests`, `analyze_git_diff`, `get_graph_summary`.
 
@@ -47,16 +52,16 @@ Example client config (Claude Code / Cursor / Cline / Windsurf all use the same 
 ```json
 {
   "mcpServers": {
-    "dependency-graph": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/mcp-dependency-graph/apps/mcp-server/src/index.ts"],
-      "env": { "MCP_GRAPH_REPOSITORY": "/absolute/path/to/your/repo" }
+    "skein": {
+      "command": "npx",
+      "args": ["-y", "skein-mcp"],
+      "env": { "SKEIN_REPOSITORY": "/absolute/path/to/your/repo" }
     }
   }
 }
 ```
 
-Optional env: `MCP_GRAPH_ROOT` (project to auto-index at startup), `MCP_GRAPH_DB` (graph SQLite path, default `$TMPDIR/mcpdg-graph.db`).
+Optional env: `SKEIN_ROOT` (project to auto-index at startup), `SKEIN_DB` (graph SQLite path, default `$TMPDIR/skein.db`).
 
 Ask things like:
 
@@ -64,26 +69,18 @@ Ask things like:
 - "Which tests cover `UserRepository.update`?"
 - "Explain the dependency path from `routes.ts` to `UserRepository.update`."
 
-## API + dashboard
-
-One-time setup so `mcpdg` lands on your PATH:
+## Dashboard
 
 ```sh
-cd apps/api && bun link
-```
-
-Then:
-
-```sh
-mcpdg                          # index cwd, serve API + UI, open the browser
-mcpdg /path/to/repo            # index a specific project
-mcpdg --port 9000 --no-open    # options: --port, --db, --no-open
-mcpdg index /path/to/repo      # one-shot for agents/scripts: index, print
+skein                          # index cwd, serve API + UI, open the browser
+skein /path/to/repo            # index a specific project
+skein --port 9000 --no-open    # options: --port, --db, --no-open
+skein index /path/to/repo      # one-shot for agents/scripts: index, print
                                # IndexResult JSON on stdout, exit non-zero on
                                # failure (logs go to stderr)
 ```
 
-The MCP server is the primary agent interface; `mcpdg index` gives agents and CI a headless way to bootstrap the same graph DB the dashboard and API read.
+The MCP server is the primary agent interface; `skein index` gives agents and CI a headless way to bootstrap the same graph DB the dashboard and API read.
 
 The dashboard's index bar (empty state and header) accepts a local path or a GitHub URL — GitHub sources are shallow-cloned into a temp dir (re-pulled on re-index) and never run code.
 

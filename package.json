@@ -1,5 +1,5 @@
 {
-  "name": "mcp-dependency-graph",
+  "name": "skein",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -14,20 +14,21 @@
     "test": "bun test",
     "test:coverage": "bun test --coverage",
     "test:e2e": "playwright test",
-    "build": "tsc --build --force && tsc -p apps/dashboard && tsc -p tests && vite build apps/dashboard",
+    "build": "tsc --build --force && tsc -p apps/dashboard && tsc -p tests && vite build apps/dashboard && cd apps/api && bun run build",
     "dev:api": "bun run apps/api/src/index.ts",
     "dev:dashboard": "vite apps/dashboard --open",
     "dev:mcp": "bun run apps/mcp-server/src/index.ts",
     "ci": "bun run format:check && bun run lint && bun run test:coverage && bun run build"
   },
   "devDependencies": {
-    "@mcpdg/analyzer-typescript": "workspace:*",
-    "@mcpdg/database": "workspace:*",
-    "@mcpdg/graph-core": "workspace:*",
-    "@mcpdg/indexer": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.20.0",
     "@playwright/test": "^1.64.1",
+    "@skein/analyzer-typescript": "workspace:*",
+    "@skein/database": "workspace:*",
+    "@skein/graph-core": "workspace:*",
+    "@skein/indexer": "workspace:*",
     "@types/bun": "^1.3.0",
+    "esbuild": "^0.28.2",
     "hono": "^4.9.6",
     "oxfmt": "^0.73.0",
     "oxlint": "^1.88.0",

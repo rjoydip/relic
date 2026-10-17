@@ -18,14 +18,14 @@ export const FIXTURE_ROOT = join(here, "fixtures", "starter-hono");
 // under one fixed root instead: deletes are best-effort, and the root is
 // swept once at suite startup, when the previous process's handles are gone.
 // Upgrade path = per-process subdirs if tests ever run concurrently.
-const SCRATCH_ROOT = join(tmpdir(), "mcpdg-test");
+const SCRATCH_ROOT = join(tmpdir(), "skein-test");
 try {
   rmSync(SCRATCH_ROOT, { recursive: true, force: true });
 } catch {
   // best-effort: a locked leftover is swept on the next run
 }
 
-export function tempDir(prefix = "mcpdg-"): string {
+export function tempDir(prefix = "skein-"): string {
   mkdirSync(SCRATCH_ROOT, { recursive: true });
   return mkdtempSync(join(SCRATCH_ROOT, prefix));
 }

@@ -1,8 +1,8 @@
-# MCP Dependency Graph — Detailed Implementation Plan
+# Skein — Detailed Implementation Plan
 
 ## 1. Project vision
 
-Build a TypeScript-based **MCP Dependency Graph** application that understands how an application's code, APIs, database, tests, frontend, and deployments are connected.
+Build a TypeScript-based **Skein** application that understands how an application's code, APIs, database, tests, frontend, and deployments are connected.
 
 Instead of exposing isolated repository tools, the MCP server constructs a refreshable dependency graph that coding agents can query to understand the impact of code changes.
 
@@ -336,9 +336,9 @@ Adapt the configuration keys to the specific client. Paths must be real and the 
   "mcpServers": {
     "dependency-graph": {
       "command": "bun",
-      "args": ["run", "/absolute/path/to/mcp-dependency-graph/apps/mcp-server/src/index.ts"],
+      "args": ["run", "/absolute/path/to/skein/apps/mcp-server/src/index.ts"],
       "env": {
-        "MCP_GRAPH_REPOSITORY": "/absolute/path/to/starter-hono"
+        "SKEIN_REPOSITORY": "/absolute/path/to/starter-hono"
       }
     }
   }
@@ -365,7 +365,7 @@ The dashboard is a first-class application and uses the same graph services as t
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ MCP Dependency Graph    Repository: starter-hono    Re-index │
+│ Skein    Repository: starter-hono    Re-index │
 ├──────────────┬──────────────────────────────┬────────────────┤
 │ Explorer     │                              │ Details        │
 │              │       Interactive Graph      │                │
@@ -595,7 +595,7 @@ GitHub Actions should run the same gates as local development, use pinned tool v
 ## 15. Recommended monorepo structure
 
 ```text
-mcp-dependency-graph/
+skein/
 ├── apps/
 │   ├── mcp-server/
 │   │   └── src/
