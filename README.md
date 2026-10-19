@@ -63,6 +63,8 @@ Example client config (Claude Code / Cursor / Cline / Windsurf all use the same 
 
 Optional env: `RELIC_ROOT` (project to auto-index at startup), `RELIC_DB` (graph SQLite path, default `$TMPDIR/relic.db`).
 
+An agent skill lives in `skills/relic/SKILL.md`; it teaches LLM clients the query order and how to read confidence and evidence. Point your client's skill loader at that directory.
+
 Ask things like:
 
 - "What is affected if I change `UserService.updateUser`?"

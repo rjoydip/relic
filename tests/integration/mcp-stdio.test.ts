@@ -78,6 +78,40 @@ describe("MCP protocol over stdio", () => {
     expect(prompts.prompts.map((p) => p.name).sort()).toEqual(["code-review", "impact-analysis"]);
   });
 
+  it(
+    "serves the auto-indexed RELIC_ROOT without an explicit repository arg",
+    { timeout: 30_000 },
+    async () => {
+      const rootDb = tempDir();
+      const env = {
+        ...process.env,
+        RELIC_DB: join(rootDb, "graph.db"),
+        RELIC_ROOT: fixture.root,
+      } as Record<string, string>;
+      delete env.RELIC_REPOSITORY;
+      const rootTransport = new StdioClientTransport({
+        command: "bun",
+        args: ["run", join(PROJECT_ROOT, "apps", "mcp-server", "src", "index.ts")],
+        cwd: PROJECT_ROOT,
+        env: env as Record<string, string>,
+        stderr: "ignore",
+      });
+      const rootClient = new Client({ name: "root-test", version: "0.0.0" });
+      try {
+        await rootClient.connect(rootTransport);
+        const result = (await rootClient.callTool({
+          name: "get_graph_summary",
+          arguments: {},
+        })) as unknown as ToolResult;
+        expect(result.isError).toBeFalsy();
+        expect((parse(result) as { rootPath: string }).rootPath).toBe(fixture.root);
+      } finally {
+        await rootClient.close();
+        await cleanup([rootDb]);
+      }
+    },
+  );
+
   it("indexes a repository and returns an impact report", { timeout: 30_000 }, async () => {
     const indexResult = await call("index_repository");
     expect(indexResult.isError).toBeFalsy();
