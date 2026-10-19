@@ -63,7 +63,19 @@ Example client config (Claude Code / Cursor / Cline / Windsurf all use the same 
 
 Optional env: `RELIC_ROOT` (project to auto-index at startup), `RELIC_DB` (graph SQLite path, default `$TMPDIR/relic.db`).
 
-An agent skill lives in `skills/relic/SKILL.md`; it teaches LLM clients the query order and how to read confidence and evidence. Point your client's skill loader at that directory.
+An agent skill lives in `skills/relic/SKILL.md`; it teaches LLM clients the query order and how to read confidence and evidence.
+
+### Install the skill
+
+Use the [skills](https://www.skills.sh/) CLI to install it into your agent:
+
+```sh
+npx skills add rjoydip/relic            # from GitHub
+npx skills add .                       # or from this checkout
+npx skills add . -g -a claude-code -y  # global, non-interactive
+```
+
+`npx skills list` shows what is installed. See the [skills docs](https://www.skills.sh/docs) for supported agents and options.
 
 Ask things like:
 
