@@ -1,187 +1,240 @@
 # Relic
 
-Technical architecture & reference manual — v1.0.0
+Static dependency-graph engine for TypeScript repositories. Relic parses your source with the TypeScript
+compiler API, stores the result in a local SQLite database, and exposes it three ways: an MCP server for
+coding agents, a CLI + HTTP API, and a React Flow dashboard.
 
-## Overview
+Everything runs locally. No account, no hosted service, no source code leaves the machine — the only network
+access is an optional `git clone` when you ask it to index a GitHub URL.
 
-Relic is a modern, high-performance Node.js and TypeScript orchestration engine and library designed for
-modern backend architectures. It simplifies the creation, management, and orchestration of scalable
-microservices, automated data workflows, and internal developer tooling.
+## What Relic is
 
-By combining strict compile-time type safety with a resilient runtime engine, Relic reduces boilerplate for
-distributed event handling, asynchronous tasks, and integration pipelines.
+Ask "what breaks if I change `UserService.updateUser`?" and get an evidence-backed list: every edge carries a
+source file, line, confidence (`static` 1.0 vs `inferred` 0.6), and a note explaining how it was resolved.
+Calls that cannot be resolved become diagnostics; they never become invented edges.
 
-### Primary use cases
+- **MCP server** — 10 tools, 3 resources and 2 prompts over stdio, for Claude Code, Cursor, Cline, Windsurf,
+  or any MCP client.
+- **CLI** — `relic` indexes a project, serves the API + dashboard, and opens a browser. `relic index` is the
+  headless variant for scripts and CI.
+- **Dashboard** — React + React Flow explorer with node search, neighbourhood expansion, code peek and
+  impact analysis.
+- **Library** — `graph-core` (domain + traversal + impact), `database` (SQLite repository), `analyzer-typescript`
+  (2-pass analyzer), `indexer` (incremental orchestration).
 
-- **Microservice orchestration** — standardize communication and state management across distributed service layers.
-- **Data pipeline execution** — construct fault-tolerant processing queues with declarative lifecycle hooks.
-- **Developer tooling & CLI interfaces** — build internal utilities using structured SDK models and interactive interfaces.
+Relic is TypeScript-only today. The analyzer never executes indexed code — it only reads it.
 
-## Key features & architecture
+## Requirements
 
-Relic uses a modular architecture centered on an asynchronous event loop and runtime worker pool.
+| Requirement | Why                                                         |
+| ----------- | ----------------------------------------------------------- |
+| Node ≥ 23.4 | `node:sqlite`, used by `packages/database`                  |
+| bun 1.4+    | Workspace scripts, tests, and the dev servers               |
+| git         | Optional — revision tracking and GitHub URL cloning/refresh |
 
-- **TypeScript-first core** — native type definitions ensuring full compile-time safety and self-documenting code bases.
-- **Dual execution models** — works seamlessly as an imported SDK within server applications or as an interactive CLI utility for operational scripts.
-- **Pipeline orchestration** — built-in state machine for handling complex async operations, retries, exponential backoffs, and dead-letter queues.
-- **Extensible plugin ecosystem** — standardized plugin lifecycle hooks (`onInit`, `preExecute`, `postExecute`, `onError`) for rapid integration with databases, observability tools, and message brokers.
+## Install from source
 
-### High-level component architecture
+Relic is not published to npm yet. Everything below assumes a checkout of
+[github.com/rjoydip/relic](https://github.com/rjoydip/relic).
 
-| Component       | Responsibility                                                        | Primary interface          |
-| --------------- | --------------------------------------------------------------------- | -------------------------- |
-| Relic Core SDK  | Lifecycle management, client initialization, configuration validation | `RelicClient`              |
-| Pipeline Engine | Execution, queue processing, concurrency management                   | `client.executePipeline()` |
-| Plugin Registry | Intercepts operations, provides logging and monitoring integrations   | `RelicPlugin`              |
-| CLI Toolkit     | Terminal-based orchestration, scaffolding, interactive diagnostics    | `@rjoydip/relic/cli`       |
-
-## Installation & getting started
-
-### Prerequisites
-
-- **Node.js** — version 18.0.0 or higher.
-- **Package manager** — npm, yarn, pnpm, or bun.
-
-### Installation
-
-::: code-group
-
-```sh [npm]
-npm install @rjoydip/relic
+```sh
+bun install
+bun run build
 ```
 
-```sh [pnpm]
-pnpm add @rjoydip/relic
+`bun run build` type-checks the three TS projects, builds the dashboard with Vite, then bundles
+`apps/api/dist/cli.js` and `apps/api/dist/index.js` (dashboard assets land in `apps/api/dist/dashboard`).
+
+Run the CLI straight from the bundle, or from source during development:
+
+```sh
+node apps/api/dist/cli.js            # serve the project in the current directory
+node apps/api/dist/index.js          # MCP stdio server
+
+bun run apps/api/src/cli.ts          # same, no build needed (dashboard needs a Vite build)
+bun run apps/mcp-server/src/index.ts
 ```
 
-```sh [yarn]
-yarn add @rjoydip/relic
-```
+## MCP server
 
-```sh [bun]
-bun add @rjoydip/relic
-```
-
-:::
-
-### Quick start example
-
-The following example demonstrates client instantiation, initialization, and simple pipeline invocation.
-
-```ts
-import { RelicClient } from "@rjoydip/relic";
-
-const client = new RelicClient({
-  environment: "production",
-  timeout: 5000,
-  retries: 3,
-  webhooks: {
-    enabled: true,
-    endpoint: "https://api.example.com/webhooks/relic",
-  },
-});
-
-async function main() {
-  try {
-    // Bootstrap internal core services and connection pools
-    await client.initialize();
-
-    console.log(`Relic engine initialized successfully. Active version: ${client.version}`);
-
-    // Trigger an asynchronous processing pipeline
-    const result = await client.executePipeline("user-ingestion-pipeline", {
-      batchSize: 250,
-      source: "external_webhook",
-    });
-
-    console.log(`Pipeline Execution Status: ${result.status}`, result.data);
-  } catch (error) {
-    console.error("Failed to execute Relic workflow:", error);
-  }
-}
-
-main();
-```
-
-## API reference
-
-### `RelicClient`
-
-The foundational class for managing core configurations, connection lifecycles, and pipeline executions.
-
-#### `new RelicClient(options: RelicConfig)`
-
-Instantiates the Relic engine instance with the specified configuration options.
-
-#### `client.initialize(): Promise<void>`
-
-Bootstraps internal modules, establishes state store connections, and validates the configured environment
-options. Must be called prior to running pipelines.
-
-#### `client.executePipeline<T, R>(pipelineId: string, payload: T): Promise<PipelineResult<R>>`
-
-Triggers a registered data processing pipeline by its unique identifier.
-
-- **`pipelineId`** (`string`) — the target identifier registered in the system.
-- **`payload`** (`Record<string, any>`) — input data passed directly to the initial pipeline node.
-
-Returns a `Promise<PipelineResult>` containing execution status, output data, execution duration, and metadata.
-
-### Key interfaces & types
-
-```ts
-export type Environment = "development" | "staging" | "production";
-
-export interface WebhookConfig {
-  enabled: boolean;
-  endpoint?: string;
-  secret?: string;
-}
-
-export interface RelicConfig {
-  environment: Environment;
-  timeout?: number;
-  retries?: number;
-  webhooks?: WebhookConfig;
-}
-
-export interface PipelineResult<T = any> {
-  executionId: string;
-  pipelineId: string;
-  status: "SUCCESS" | "FAILED" | "TIMEOUT";
-  data: T;
-  durationMs: number;
-  timestamp: string;
-}
-```
-
-## Configuration schema
-
-Relic can be configured programmatically or via a standard configuration file (`relic.config.json` or
-`.relicrc`) placed at the root of your application repository.
+The server auto-indexes its launch directory on startup, so tools answer immediately. stdout is reserved for
+protocol messages; all logs go to stderr.
 
 ```json
 {
-  "$schema": "https://json.schemastore.org/relic.json",
-  "mode": "production",
-  "timeout": 5000,
-  "retries": 3,
-  "logging": {
-    "level": "info",
-    "format": "json"
-  },
-  "webhooks": {
-    "enabled": true,
-    "endpoint": "https://events.internal.domain/relic"
+  "mcpServers": {
+    "relic": {
+      "command": "node",
+      "args": ["/absolute/path/to/relic/apps/api/dist/index.js"],
+      "env": { "RELIC_REPOSITORY": "/absolute/path/to/your/repo" }
+    }
   }
 }
 ```
 
-## Contributing & licensing
+Point `args` at `/absolute/path/to/relic/apps/mcp-server/src/index.ts` with `"command": "bun"` if you have not
+built the bundle.
 
-Contributions to Relic are welcome. Please ensure all pull requests pass type-checking, linting, and unit
-test suites before submitting.
+### Environment
 
-- **GitHub repository** — [github.com/rjoydip/relic](https://github.com/rjoydip/relic)
-- **Issue tracker** — [github.com/rjoydip/relic/issues](https://github.com/rjoydip/relic/issues)
-- **License** — released under the permissive MIT License.
+| Variable           | Default                   | Effect                                            |
+| ------------------ | ------------------------- | ------------------------------------------------- |
+| `RELIC_REPOSITORY` | —                         | Default repository for tool calls (path or id)    |
+| `RELIC_ROOT`       | `RELIC_REPOSITORY` or cwd | Project auto-indexed at startup                   |
+| `RELIC_DB`         | `<tmpdir>/relic.db`       | Graph SQLite file (shared with the CLI/dashboard) |
+
+### Tools
+
+| Tool                  | Inputs                                                                                      | Returns                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `index_repository`    | `repository?`, `revision?`                                                                  | `IndexResult` (counts, duration, diagnostics)                 |
+| `search_symbols`      | `query`, `type?`, `repository?`                                                             | Matching nodes + count                                        |
+| `get_symbol_details`  | `nodeId?` or `symbol?`, `repository?`                                                       | Definition, incoming/outgoing edges, evidence                 |
+| `analyze_impact`      | `nodeId?` or `symbol?`, `maxDepth?` (1–10), `includeTests?`, `includeIndirectDependencies?` | Affected nodes with relationship, depth, confidence, evidence |
+| `find_dependents`     | `nodeId?` or `symbol?`, `maxDepth?` (default 3)                                             | Reverse dependencies (who depends on this)                    |
+| `find_dependencies`   | `nodeId?` or `symbol?`, `maxDepth?` (default 3)                                             | Forward dependencies (what this depends on)                   |
+| `find_related_tests`  | `nodeId?` or `symbol?`, `repository?`                                                       | Tests linked by `TESTS` edges + one hop back                  |
+| `analyze_git_diff`    | `base?` (default `HEAD`), `head?` (default working tree), `maxDepth?`                       | Changed files, changed targets, transitive impact             |
+| `get_dependency_path` | `from`, `to`, `repository?`                                                                 | Shortest known relationship path                              |
+| `get_graph_summary`   | `repository?`                                                                               | Repository meta, node/edge counts, diagnostics                |
+
+Symbols resolve by exact name or qualified name; an ambiguous name fails with the first five matches and asks
+for `nodeId`. Errors are returned as `ERROR [CODE]: message` with `isError: true`.
+
+### Resources and prompts
+
+- `graph://repository/summary` — graph and indexing statistics
+- `graph://repository/index-status` — revision, duration, file count, diagnostics
+- `graph://repository/components` — bounded list of indexed components
+- Prompt `impact-analysis` (`symbol`) — trace impact, routes, tables and tests, flag inferred edges
+- Prompt `code-review` (`summary`) — review a change using `analyze_git_diff`
+
+## CLI
+
+```sh
+relic                          # index cwd, serve API + UI, open the browser
+relic /path/to/repo            # index a specific project
+relic --port 9000 --no-open    # --port, --db, --no-open
+relic index /path/to/repo      # one-shot: index, print IndexResult JSON on
+                               # stdout, exit non-zero on failure
+```
+
+- Server binds `127.0.0.1` only; `--no-open` skips launching the browser.
+- Port: `--port`, else `PORT`, else `8787`.
+- Database: `--db`, else `RELIC_DB`, else `<tmpdir>/relic.db`. The MCP server, CLI, API and dashboard share it.
+- `relic index` writes JSON to stdout and logs to stderr, which is what agents and CI consume.
+
+## HTTP API
+
+All routes are under `/api`. `repository` accepts either a repository id or a filesystem path.
+
+| Method | Path                                | Notes                                                                                           |
+| ------ | ----------------------------------- | ----------------------------------------------------------------------------------------------- |
+| GET    | `/repositories`                     | All indexed repositories with metadata                                                          |
+| GET    | `/repositories/:id/summary`         | Repository meta + node/edge counts                                                              |
+| POST   | `/repositories/:id/index`           | Re-index; body `{ "root": "/path" }` optional                                                   |
+| GET    | `/repositories/:id/file?path=`      | File contents for the dashboard peek (path must stay in the repo)                               |
+| POST   | `/index`                            | Body `{ "source": "/path" }` or `{ "source": "https://github.com/o/r" }`                        |
+| GET    | `/index-status?repository=`         | Revision, timestamps, counts, diagnostics                                                       |
+| GET    | `/graph/nodes`                      | `repository`, `type`, `filePath`, `q`, `limit` (default 50), `offset`                           |
+| GET    | `/graph/edges`                      | `repository`, `sourceId`, `targetId`, `types` (CSV), `limit` (default 200)                      |
+| GET    | `/graph/nodes/:id`                  | Single node                                                                                     |
+| GET    | `/graph/nodes/:id/neighborhood`     | `depth` (1–4, default 1), `limit`; forward + reverse traversal                                  |
+| POST   | `/impact`                           | Body `{ repository, nodeId \| symbol, maxDepth?, includeTests?, includeIndirectDependencies? }` |
+| GET    | `/tests/related?repository=&nodeId= | symbol=`                                                                                        | Tests linked to a node |
+
+Pagination is capped at 5000 rows. Errors come back as `{ "error": "<CODE>", "message": "…" }` with `400`
+for input problems and `404` for `REPOSITORY_NOT_FOUND` / `NODE_NOT_FOUND`. Codes: `INVALID_INPUT`,
+`REPOSITORY_NOT_FOUND`, `NODE_NOT_FOUND`, `PATH_ESCAPE`, `INTERNAL`.
+
+GitHub sources are shallow-cloned into `<tmpdir>/relic-github/<hash>` and `git pull --ff-only` on re-index;
+they are rejected when the API is configured with `allowedRoots`.
+
+## Dashboard
+
+```sh
+bun run dev:api        # http://127.0.0.1:8787
+bun run dev:dashboard  # http://127.0.0.1:5173, proxies /api to :8787
+```
+
+The UI supports searching nodes, expanding a neighbourhood, poking at source code, and running impact
+analysis. Its index bar accepts a local path or a GitHub URL.
+
+## Graph model
+
+Node types: `repository`, `file`, `symbol`, `route`, `api_operation`, `database_table`, `database_query`,
+`queue`, `test`, `frontend_operation`, `service`, `deployment`.
+
+Edge types: `CONTAINS`, `DECLARES`, `IMPORTS`, `CALLS`, `EXPOSES`, `READS`, `WRITES`, `PUBLISHES`, `CONSUMES`,
+`TESTS`, `USES_OPERATION`, `DEPENDS_ON`.
+
+Every edge stores confidence derived from its evidence source:
+
+| Evidence  | Confidence | Meaning                                                                       |
+| --------- | ---------- | ----------------------------------------------------------------------------- |
+| `static`  | 1.0        | Exact declaration/import/call resolution from the AST                         |
+| `runtime` | 0.9        | Observed at runtime (reserved for runtime collectors)                         |
+| inferred  | 0.6        | Convention-based (e.g. property call via an import binding, endpoint mapping) |
+
+Diagnostics (`unresolved`, `parse-error`, `skipped`) are stored on the repository and surfaced by
+`index-status` and `get_graph_summary`. Unresolved references are never persisted as edges.
+
+## Indexing semantics
+
+- **Files:** `.ts .tsx .mts .cts .js .jsx .mjs .cjs`. Hidden entries and `node_modules`, `.git`, `dist`,
+  `build`, `coverage`, `.next`, `.turbo`, `out`, `.data` are skipped.
+- **Incremental:** files are compared by content hash. Changed files, deleted files, and the _importers_ of
+  changed/deleted files are re-analyzed so `IMPORTS` edges re-resolve.
+- **Two passes:** pass A extracts declarations, imports, calls, routes, SQL and frontend operations; pass B
+  resolves relationships against fresh declarations plus the database.
+- **Extraction:** functions, classes, methods and variables become `symbol` nodes; route handlers
+  (`get/post/put/patch/delete/head/options` with a `/`-prefixed path) become `route` nodes; `on` handlers
+  become `api_operation`; SQL strings produce `READS`/`WRITES` edges to `database_table` nodes; test files
+  (`.test`/`.spec`, or anything under `tests/`, `__tests__/`) become `test` nodes with `TESTS` edges.
+- **Atomic:** the graph for a repository is replaced transactionally; deleted files and orphaned tables are
+  pruned. Edges whose endpoints are missing are dropped and reported as diagnostics.
+- **Revision:** `git rev-parse HEAD` is recorded automatically unless `revision` is passed to
+  `index_repository`.
+
+## Security & limits
+
+- The server binds `127.0.0.1` and is meant for local use; it has no authentication.
+- Repository paths and file peeks are checked against the repository root (`PATH_ESCAPE`); when
+  `allowedRoots` is configured, repository paths must resolve inside them.
+- SQL is fully parameterized (see `tests/security/`), pagination is capped, and indexed code is never executed.
+- GitHub clones are shallow (`--depth 1`) with a timeout and no size cap — expose that endpoint beyond
+  localhost only after adding one.
+
+## Repository layout
+
+```sh
+packages/
+  graph-core/             domain types, GraphRepository interface, GraphService (impact analysis)
+  database/               node:sqlite storage behind GraphRepository (recursive-CTE traversal)
+  analyzer-typescript/    TypeScript Compiler API analyzer (2 passes: extract, resolve)
+  indexer/                incremental indexing (hash change detection, importer re-expansion)
+apps/
+  mcp-server/             MCP stdio server: 10 tools, 3 resources, 2 prompts
+  api/                    Hono API + the publishable package: `relic` CLI and `relic-mcp` bins
+  dashboard/              React + React Flow graph explorer
+tests/
+  fixtures/starter-hono/  deterministic fixture (UserController → UserService.updateUser → UserRepository.update)
+  unit|integration|security/
+```
+
+## Development
+
+```sh
+bun run typecheck   # tsc (3 projects)
+bun run lint        # oxlint --deny-warnings
+bun run test        # bun test
+bun run test:e2e    # playwright (isolated API port + temp DB)
+bun run build       # tsc + vite dashboard + esbuild bundles in apps/api/dist
+bun run ci          # format:check + lint + typecheck + test:coverage + build
+```
+
+Pull requests are expected to pass format, lint, type-check, unit tests with coverage and a full build.
+
+## License
+
+No license file is declared in this repository yet. Treat the code as all rights reserved until one is added.

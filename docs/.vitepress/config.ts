@@ -2,7 +2,7 @@ import { defineConfig } from "vitepress";
 
 export default defineConfig({
   title: "Relic",
-  description: "Relic technical architecture & reference manual",
+  description: "Static dependency-graph engine for TypeScript repositories",
   cleanUrls: true,
   appearance: true,
   themeConfig: {
@@ -10,17 +10,19 @@ export default defineConfig({
     lightModeSwitchTitle: "Switch to light theme",
     darkModeSwitchTitle: "Switch to dark theme",
     sidebar: [
-      {
-        text: "Manual",
-        items: [
-          { text: "Overview", link: "/#overview" },
-          { text: "Architecture", link: "/#key-features-architecture" },
-          { text: "Getting started", link: "/#installation-getting-started" },
-          { text: "API reference", link: "/#api-reference" },
-          { text: "Configuration", link: "/#configuration-schema" },
-          { text: "Contributing", link: "/#contributing-licensing" },
-        ],
-      },
+      { text: "Overview", link: "/#what-relic-is" },
+      { text: "Requirements", link: "/#requirements" },
+      { text: "Install from source", link: "/#install-from-source" },
+      { text: "MCP server", link: "/#mcp-server" },
+      { text: "CLI", link: "/#cli" },
+      { text: "HTTP API", link: "/#http-api" },
+      { text: "Dashboard", link: "/#dashboard" },
+      { text: "Graph model", link: "/#graph-model" },
+      { text: "Indexing semantics", link: "/#indexing-semantics" },
+      { text: "Security & limits", link: "/#security-limits" },
+      { text: "Repository layout", link: "/#repository-layout" },
+      { text: "Development", link: "/#development" },
+      { text: "License", link: "/#license" },
     ],
     outline: { level: [2, 3] },
     search: { provider: "local" },
@@ -30,8 +32,8 @@ export default defineConfig({
       text: "Edit this page",
     },
     footer: {
-      message: "Released under the MIT License.",
-      copyright: "Copyright © Relic contributors",
+      message: "Local-first · no data leaves your machine",
+      copyright: "Relic",
     },
   },
 });
