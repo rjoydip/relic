@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "docs"
   ],
   "type": "module",
   "scripts": {
@@ -18,6 +19,9 @@
     "dev:api": "bun run apps/api/src/index.ts",
     "dev:dashboard": "vite apps/dashboard --open",
     "dev:mcp": "bun run apps/mcp-server/src/index.ts",
+    "docs:dev": "bun run --filter @relic/docs dev",
+    "docs:build": "bun run --filter @relic/docs build",
+    "docs:preview": "bun run --filter @relic/docs preview",
     "ci": "bun run format:check && bun run lint && bun run test:coverage && bun run build"
   },
   "devDependencies": {
