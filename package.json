@@ -22,6 +22,7 @@
     "docs:dev": "bun run --filter @relic/docs dev",
     "docs:build": "bun run --filter @relic/docs build",
     "docs:preview": "bun run --filter @relic/docs preview",
+    "docs:deploy": "bun run --filter @relic/docs deploy",
     "ci": "bun run format:check && bun run lint && bun run test:coverage && bun run build"
   },
   "devDependencies": {
