@@ -4,8 +4,11 @@ export default defineConfig({
   title: "Relic",
   description: "Relic technical architecture & reference manual",
   cleanUrls: true,
+  appearance: true,
   themeConfig: {
-    nav: [{ text: "Documentation", link: "/" }],
+    darkModeSwitchLabel: "Appearance",
+    lightModeSwitchTitle: "Switch to light theme",
+    darkModeSwitchTitle: "Switch to dark theme",
     sidebar: [
       {
         text: "Manual",
