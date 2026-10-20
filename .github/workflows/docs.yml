@@ -2,7 +2,7 @@ name: docs
 
 on:
   push:
-    branches: [main, feat/docs-site]
+    branches: [main]
     paths:
       - docs/**
       - package.json
