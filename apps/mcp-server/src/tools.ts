@@ -30,7 +30,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   const { graph, indexer, repository } = deps;
 
   const repoId = (input?: string): string => {
-    const path = input ?? process.env.RELIC_REPOSITORY;
+    const path = input ?? process.env.RELIC_ROOT ?? process.env.RELIC_REPOSITORY ?? process.cwd();
     const id = coerceRepositoryId(
       path,
       (candidate) => repository.getRepository(candidate) !== null,
@@ -307,7 +307,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   );
 
   // Resources.
-  const defaultRepo = (): string => repoId(process.env.RELIC_REPOSITORY);
+  const defaultRepo = (): string => repoId();
   server.registerResource(
     "repository-summary",
     "graph://repository/summary",
