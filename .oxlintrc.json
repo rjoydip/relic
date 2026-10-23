@@ -8,7 +8,13 @@
     "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
     "typescript/no-explicit-any": "error"
   },
-  "ignorePatterns": ["apps/dashboard/dist", "coverage", "**/*.tsbuildinfo"],
+  "ignorePatterns": [
+    "apps/dashboard/dist",
+    "docs/.vitepress/dist",
+    "docs/.vitepress/cache",
+    "coverage",
+    "**/*.tsbuildinfo"
+  ],
   "env": {
     "builtin": true
   }
