@@ -6,7 +6,9 @@ import { DatabaseClient, SqliteGraphRepository, type ReplaceGraphInput } from "@
 import {
   extractFile,
   fileId,
+  loadCodeowners,
   makeRepositoryContext,
+  ownersFor,
   readFileHash,
   relate,
   walkRepository,
@@ -35,6 +37,9 @@ export class Indexer {
   index(root: string, options: { revision?: string | null } = {}): IndexResult {
     const started = Date.now();
     const ctx = makeRepositoryContext(root);
+    // ponytail: a CODEOWNERS edit only reaches files that are re-analyzed; run
+    // a full re-index when ownership changes matter.
+    const codeowners = loadCodeowners(ctx.rootPath);
     const current = walkRepository(ctx.rootPath);
     const stored = this.repo.listFiles(ctx.id);
     const storedHashes = new Map(stored.map((f) => [f.filePath, f.contentHash]));
@@ -93,6 +98,14 @@ export class Indexer {
     const files: ReplaceGraphInput["files"] = [];
     const diagnostics: Diagnostic[] = [];
     for (const [path, file] of extracted) {
+      // CODEOWNERS applies to every node declared in the file; blame is
+      // resolved on demand by the owners query rather than at index time.
+      const owners = ownersFor(codeowners, path);
+      if (owners.length > 0) {
+        for (const node of file.nodes) {
+          if (node.filePath) node.metadata = { ...node.metadata, owners };
+        }
+      }
       const result = relate(ctx, file, lookup);
       files.push({ filePath: path, nodes: file.nodes, edges: result.edges });
       diagnostics.push(...result.diagnostics);
@@ -179,3 +192,4 @@ export function openGraph(dbPath: string): OpenGraph {
 
 export { makeRepositoryContext, repositoryIdFor } from "@relic/analyzer-typescript";
 export type { GraphRepository, NodeFilter } from "@relic/graph-core";
+export * from "./changes";

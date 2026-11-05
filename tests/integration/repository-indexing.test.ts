@@ -46,6 +46,7 @@ describe("repository indexing — critical fixture scenario", () => {
       .searchSymbols(repoId, "UserService.updateUser")
       .find((n) => n.qualifiedName === "UserService.updateUser")!;
     expect(target).toBeDefined();
+    expect(target.metadata.owners).toEqual(["@relic/services"]);
 
     const impact = graph.graph.analyzeImpact(repoId, target.id, {
       maxDepth: 5,
@@ -160,7 +161,7 @@ describe("incremental indexing", () => {
       .searchSymbols(repoId, "UserService.updateUser")
       .find((n) => n.qualifiedName === "UserService.updateUser")!;
     const callers = graph.graph.findDependents(repoId, target.id, 2);
-    expect(callers.map((n) => n.qualifiedName)).toContain("UserController.updateUser");
+    expect(callers.map((s) => s.node.qualifiedName)).toContain("UserController.updateUser");
   });
 
   it("stale edges disappear when a call site changes", () => {
@@ -221,6 +222,6 @@ describe("incremental indexing", () => {
       .searchSymbols(repoId, "UserService.updateUser")
       .find((n) => n.qualifiedName === "UserService.updateUser")!;
     const deps = graph.graph.findDependencies(repoId, target.id, 2);
-    expect(deps.map((n) => n.qualifiedName)).not.toContain("UserRepository.update");
+    expect(deps.map((s) => s.node.qualifiedName)).not.toContain("UserRepository.update");
   });
 });

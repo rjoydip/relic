@@ -102,6 +102,134 @@ const SQL_PATTERN = /\b(SELECT|INSERT|UPDATE|DELETE)\b/i;
 const SQL_TABLE_PATTERN = /\b(?:FROM|INTO|UPDATE)\s+[`"]?(\w+)/i;
 const MUTATION_KEYS = new Set(["Mutation", "Query", "Subscription"]);
 
+const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
+const NEST_DECORATORS = new Set([
+  "Get",
+  "Post",
+  "Put",
+  "Patch",
+  "Delete",
+  "Head",
+  "Options",
+  "All",
+]);
+
+/** Next.js App Router route handler (app/.../route.ts) → "/users/:id". */
+function nextAppRoutePath(filePath: string): string | null {
+  const match = filePath.match(/(?:^|\/)(?:src\/)?app\/(.*\/)?route\.[cm]?[jt]sx?$/);
+  if (!match) return null;
+  return routePathFromSegments((match[1] ?? "").split("/").filter(Boolean));
+}
+
+/** Next.js Pages Router `pages/api/**` → "/api/health". */
+function nextPagesRoutePath(filePath: string): string | null {
+  const match = filePath.match(/(?:^|\/)(?:src\/)?pages\/api\/(.*)\.[cm]?[jt]sx?$/);
+  if (!match) return null;
+  const segments = match[1]!.split("/").filter(Boolean);
+  if (segments[segments.length - 1] === "index") segments.pop();
+  return routePathFromSegments(["api", ...segments]);
+}
+
+/** Next.js Pages Router page file → "/users/:id" (API and special files excluded). */
+function nextPagesPagePath(filePath: string): string | null {
+  const match = filePath.match(/(?:^|\/)(?:src\/)?pages\/(.*)\.[cm]?[jt]sx?$/);
+  if (!match) return null;
+  const segments = match[1]!.split("/").filter(Boolean);
+  if (segments[0] === "api") return null;
+  const file = segments.pop()!;
+  if (file.startsWith("_")) return null;
+  if (file !== "index") segments.push(file);
+  return routePathFromSegments(segments);
+}
+
+function routePathFromSegments(segments: string[]): string {
+  const path = segments
+    .filter((segment) => !/^\(.+\)$/.test(segment)) // Next route groups "(marketing)"
+    .map((segment) => {
+      const optionalCatchAll = segment.match(/^\[\[\.\.\.(.+)\]\]$/);
+      if (optionalCatchAll) return `*${optionalCatchAll[1]}`;
+      const catchAll = segment.match(/^\[\.\.\.(.+)\]$/);
+      if (catchAll) return `*${catchAll[1]}`;
+      const dynamic = segment.match(/^\[(.+)\]$/);
+      if (dynamic) return `:${dynamic[1]}`;
+      return segment;
+    });
+  return `/${path.join("/")}`;
+}
+
+function hasDefaultModifier(node: ts.Node): boolean {
+  const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+  return modifiers?.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword) ?? false;
+}
+
+function hasExportModifier(node: ts.Node): boolean {
+  const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+  return (
+    modifiers?.some(
+      (m) => m.kind === ts.SyntaxKind.ExportKeyword || m.kind === ts.SyntaxKind.DefaultKeyword,
+    ) ?? false
+  );
+}
+
+/** First decorator whose name is in `names`, with its first string argument. */
+function decoratorMatch(
+  node: ts.Node,
+  names: Set<string>,
+): { name: string; arg: string | null } | null {
+  const decorators = ts.canHaveDecorators(node) ? ts.getDecorators(node) : undefined;
+  if (!decorators) return null;
+  for (const decorator of decorators) {
+    const expr = decorator.expression;
+    const name = ts.isCallExpression(expr)
+      ? ts.isIdentifier(expr.expression)
+        ? expr.expression.text
+        : ts.isPropertyAccessExpression(expr.expression)
+          ? expr.expression.name.text
+          : null
+      : ts.isIdentifier(expr)
+        ? expr.text
+        : null;
+    if (!name || !names.has(name)) continue;
+    const argNode = ts.isCallExpression(expr) ? expr.arguments[0] : undefined;
+    return { name, arg: argNode ? stringArgValue(argNode) : null };
+  }
+  return null;
+}
+
+function joinRoutePath(prefix: string | null, suffix: string | null): string {
+  const parts = [prefix ?? "", suffix ?? ""]
+    .map((part) => part.replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+  return `/${parts.join("/")}`;
+}
+
+/** tRPC: the terminal `.query` / `.mutation` / `.subscription` in a procedure chain. */
+function trpcProcedureKind(expr: ts.Expression): "query" | "mutation" | "subscription" | null {
+  let current: ts.Expression = expr;
+  while (ts.isCallExpression(current)) {
+    const callee = current.expression;
+    if (!ts.isPropertyAccessExpression(callee)) break;
+    const name = callee.name.text;
+    if (name === "query" || name === "mutation" || name === "subscription") return name;
+    current = callee.expression;
+  }
+  return null;
+}
+
+function trpcResolver(expr: ts.Expression): ts.Expression | null {
+  let current: ts.Expression = expr;
+  while (ts.isCallExpression(current)) {
+    const callee = current.expression;
+    if (!ts.isPropertyAccessExpression(callee)) break;
+    const name = callee.name.text;
+    if (name === "query" || name === "mutation" || name === "subscription") {
+      return current.arguments[0] ?? null;
+    }
+    current = callee.expression;
+  }
+  return null;
+}
+
 export function extractFile(
   repo: RepositoryContext,
   filePath: string,
@@ -132,6 +260,13 @@ export function extractFile(
   const handlers: PendingHandler[] = [];
   const frontend: PendingFrontend[] = [];
   let currentClass: string | null = null;
+  let currentControllerPrefix: string | null = null;
+  const nextAppPath = nextAppRoutePath(filePath);
+  const pagesRoutes: Array<{ method: string; path: string }> = [];
+  const pagesApi = nextPagesRoutePath(filePath);
+  if (pagesApi) pagesRoutes.push({ method: "ANY", path: pagesApi });
+  const pagesPage = nextPagesPagePath(filePath);
+  if (pagesPage) pagesRoutes.push({ method: "GET", path: pagesPage });
 
   const lineOf = (pos: number): number => sf.getLineAndCharacterOfPosition(pos).line + 1;
 
@@ -170,6 +305,7 @@ export function extractFile(
     simpleName: string,
     qualifiedName: string,
     kind: Declaration["kind"],
+    exported = false,
   ): void => {
     const decl: Declaration = {
       id: symbolId(repo.id, filePath, qualifiedName),
@@ -185,11 +321,37 @@ export function extractFile(
         qualifiedName,
         startLine: decl.startLine,
         endLine: decl.endLine,
-        metadata: { kind },
+        metadata: exported ? { kind, exported: true } : { kind },
       }),
     );
     refs.push({ id: decl.id, name: simpleName, qualifiedName, filePath });
     declarationIds.set(node, decl.id);
+  };
+
+  /** File- or decorator-derived route: node + EXPOSES handler target. */
+  const addRoute = (
+    method: string,
+    path: string,
+    node: ts.Node,
+    metadata: Record<string, unknown>,
+    handler?: HandlerRef,
+    container?: { start: number; end: number },
+  ): string => {
+    const upper = method.toUpperCase();
+    const qn = `${upper} ${path}`;
+    const id = routeId(repo.id, upper, path);
+    nodes.push(
+      makeNode(id, "route", qn, {
+        qualifiedName: qn,
+        startLine: lineOf(node.getStart()),
+        endLine: lineOf(node.getEnd()),
+        metadata: { method: upper, path, ...metadata },
+      }),
+    );
+    refs.push({ id, name: qn, qualifiedName: qn, filePath });
+    if (container) containers.push({ id, ...container });
+    if (handler) handlers.push({ containerId: id, ref: handler, line: lineOf(node.getStart()) });
+    return id;
   };
 
   const containerFor = (pos: number): string | null => {
@@ -280,10 +442,14 @@ export function extractFile(
 
     if (ts.isClassDeclaration(node) && node.name) {
       const prevClass = currentClass;
+      const prevController = currentControllerPrefix;
       currentClass = node.name.text;
-      declare(node, node.name.text, node.name.text, "class");
+      const controller = decoratorMatch(node, new Set(["Controller"]));
+      currentControllerPrefix = controller ? (controller.arg ?? "") : null;
+      declare(node, node.name.text, node.name.text, "class", hasExportModifier(node));
       node.forEachChild(visit);
       currentClass = prevClass;
+      currentControllerPrefix = prevController;
       return;
     }
 
@@ -293,12 +459,51 @@ export function extractFile(
           ? node.name.text
           : node.name.getText(sf);
       declare(node, name, `${currentClass}.${name}`, "method");
+      if (currentControllerPrefix !== null) {
+        const route = decoratorMatch(node, NEST_DECORATORS);
+        if (route) {
+          addRoute(
+            route.name === "All" ? "ALL" : route.name,
+            joinRoutePath(currentControllerPrefix, route.arg),
+            node,
+            { framework: "nestjs" },
+            { kind: "identifier", name },
+          );
+        }
+      }
       node.forEachChild(visit);
       return;
     }
 
     if (ts.isFunctionDeclaration(node) && node.name) {
-      declare(node, node.name.text, node.name.text, "function");
+      declare(node, node.name.text, node.name.text, "function", hasExportModifier(node));
+      const name = node.name.text;
+      if (nextAppPath && HTTP_METHODS.has(name.toUpperCase())) {
+        addRoute(
+          name.toUpperCase(),
+          nextAppPath,
+          node,
+          { framework: "next-app" },
+          {
+            kind: "identifier",
+            name,
+          },
+        );
+      }
+      if (pagesRoutes.length > 0 && hasDefaultModifier(node)) {
+        for (const route of pagesRoutes) {
+          addRoute(
+            route.method,
+            route.path,
+            node,
+            { framework: "next-pages" },
+            {
+              kind: "identifier",
+              name,
+            },
+          );
+        }
+      }
       node.forEachChild(visit);
       return;
     }
@@ -308,7 +513,20 @@ export function extractFile(
       const name = node.name.text;
       // Instance exports (`export const userService = new UserService()`) are
       // resolution targets for imports, so every named variable is declared.
-      declare(node, name, name, "variable");
+      declare(node, name, name, "variable", hasExportModifier(node.parent?.parent ?? node));
+
+      if (nextAppPath && HTTP_METHODS.has(name.toUpperCase())) {
+        addRoute(
+          name.toUpperCase(),
+          nextAppPath,
+          node,
+          { framework: "next-app" },
+          {
+            kind: "identifier",
+            name,
+          },
+        );
+      }
 
       if (/^(?:.+\.)?(?:\w+)(?:Mutation|Query)$/.test(name)) {
         const id = frontendOperationId(repo.id, name);
@@ -357,10 +575,82 @@ export function extractFile(
       return;
     }
 
+    if (
+      ts.isExportAssignment(node) &&
+      !node.isExportEquals &&
+      pagesRoutes.length > 0 &&
+      !ts.isIdentifier(node.expression)
+    ) {
+      // `export default function () {}` is a FunctionDeclaration; this covers
+      // `export default async (req, res) => {}` and `export default handler`.
+      for (const route of pagesRoutes) {
+        addRoute(route.method, route.path, node, { framework: "next-pages" }, undefined, {
+          start: node.expression.getStart(),
+          end: node.expression.getEnd(),
+        });
+      }
+      node.forEachChild(visit);
+      return;
+    }
+
+    if (ts.isExportAssignment(node) && !node.isExportEquals && pagesRoutes.length > 0) {
+      for (const route of pagesRoutes) {
+        addRoute(
+          route.method,
+          route.path,
+          node,
+          { framework: "next-pages" },
+          {
+            kind: "identifier",
+            name: (node.expression as ts.Identifier).text,
+          },
+        );
+      }
+      node.forEachChild(visit);
+      return;
+    }
+
     if (ts.isCallExpression(node)) {
       const line = lineOf(node.getStart());
       const callee = node.expression;
       const arg0 = stringArg(node.arguments[0]);
+
+      // tRPC: router({ getUser: publicProcedure.query(resolver) }) or t.router(...).
+      const isRouterCall =
+        (ts.isIdentifier(callee) && callee.text === "router") ||
+        (ts.isPropertyAccessExpression(callee) && callee.name.text === "router");
+      if (isRouterCall && node.arguments[0] && ts.isObjectLiteralExpression(node.arguments[0])) {
+        for (const prop of node.arguments[0].properties) {
+          if (!ts.isPropertyAssignment(prop)) continue;
+          const kind = trpcProcedureKind(prop.initializer);
+          if (!kind) continue;
+          const name = prop.name.getText(sf).replace(/^["']|["']$/g, "");
+          const route = addRoute(kind.toUpperCase(), `/trpc/${name}`, prop, {
+            framework: "trpc",
+            procedure: kind,
+          });
+          const resolver = trpcResolver(prop.initializer);
+          if (resolver && (ts.isArrowFunction(resolver) || ts.isFunctionExpression(resolver))) {
+            declare(resolver, name, name, "function");
+            containers.push({
+              id: declarationIds.get(resolver)!,
+              start: resolver.getStart(),
+              end: resolver.getEnd(),
+            });
+            handlers.push({
+              containerId: route,
+              ref: { kind: "identifier", name },
+              line,
+            });
+          } else if (resolver && ts.isIdentifier(resolver)) {
+            handlers.push({
+              containerId: route,
+              ref: { kind: "identifier", name: resolver.text },
+              line,
+            });
+          }
+        }
+      }
 
       if (ts.isPropertyAccessExpression(callee)) {
         const method = callee.name.text;
@@ -529,22 +819,109 @@ export function resolveImport(
   fromFile: string,
   specifier: string,
 ): ImportResolution {
-  if (!specifier.startsWith(".")) return { kind: "external" };
   const clean = specifier.split(/[?#]/)[0]!;
-  const base = normalize(join(dirname(fromFile), clean))
-    .split("\\")
-    .join("/");
-  if (base.startsWith("..")) return { kind: "escape" };
+  if (clean.startsWith("/")) return { kind: "escape" };
+
+  if (clean.startsWith(".")) {
+    const base = normalize(join(dirname(fromFile), clean))
+      .split("\\")
+      .join("/");
+    if (base.startsWith("..")) return { kind: "escape" };
+    return probeImport(repo, base) ?? { kind: "not-found" };
+  }
+
+  // tsconfig `paths` — longest matching pattern wins, wildcard included.
+  const alias = matchAlias(clean, repo.importConfig.paths);
+  if (alias) {
+    const baseDir = repo.importConfig.baseUrl ?? ".";
+    for (const target of alias) {
+      const rel = normalize(join(baseDir, target)).split("\\").join("/");
+      if (rel.startsWith("..")) continue;
+      const hit = probeImport(repo, rel);
+      if (hit) return hit;
+    }
+    // Configured alias that points at nothing is a graph gap, not an npm package.
+    return { kind: "not-found" };
+  }
+
+  // `baseUrl` makes bare specifiers resolve from the repo (e.g. "src/lib/x").
+  if (repo.importConfig.baseUrl) {
+    const rel = normalize(join(repo.importConfig.baseUrl, clean)).split("\\").join("/");
+    if (!rel.startsWith("..")) {
+      const hit = probeImport(repo, rel);
+      if (hit) return hit;
+    }
+  }
+
+  // Workspace sibling: "@scope/pkg" or "@scope/pkg/subpath".
+  const workspace = matchWorkspace(clean, repo.importConfig.workspaces);
+  if (workspace) {
+    const bases = workspace.subpath
+      ? [join(workspace.dir, workspace.subpath), join(workspace.dir, "src", workspace.subpath)]
+      : [join(workspace.dir, "src/index"), join(workspace.dir, "index")];
+    for (const base of bases) {
+      const hit = probeImport(repo, normalize(base).split("\\").join("/"));
+      if (hit) return hit;
+    }
+    // An indexed workspace package that cannot be entered is a diagnostic-worthy gap.
+    return { kind: "not-found" };
+  }
+
+  return { kind: "external" };
+}
+
+function probeImport(repo: RepositoryContext, base: string): ImportResolution | null {
   const candidates = [base];
-  for (const ext of SUPPORTED_EXTENSIONS) candidates.push(base + ext, join(base, "index" + ext));
+  for (const ext of SUPPORTED_EXTENSIONS) candidates.push(base + ext, `${base}/index${ext}`);
   for (const candidate of candidates) {
     const rel = candidate.split("\\").join("/");
+    if (rel.startsWith("..") || rel.split("/").includes("..")) continue;
     if (rel.split("/").some((seg) => IGNORED_DIRS.has(seg))) continue;
     if (!existsSync(join(repo.rootPath, rel))) continue;
     if (!SUPPORTED_EXTENSIONS.has(extOf(rel))) continue;
     return { kind: "ok", path: rel };
   }
-  return { kind: "not-found" };
+  return null;
+}
+
+/** Expand a tsconfig `paths` pattern into target templates, or null when none match. */
+function matchAlias(specifier: string, paths: Record<string, string[]>): string[] | null {
+  let best: { prefixLength: number; star: number; pattern: string; targets: string[] } | null =
+    null;
+  for (const [pattern, targets] of Object.entries(paths)) {
+    const star = pattern.indexOf("*");
+    const prefix = star < 0 ? pattern : pattern.slice(0, star);
+    const suffix = star < 0 ? "" : pattern.slice(star + 1);
+    const matches =
+      star < 0
+        ? specifier === pattern
+        : specifier.startsWith(prefix) &&
+          specifier.endsWith(suffix) &&
+          specifier.length >= prefix.length + suffix.length;
+    if (!matches) continue;
+    if (!best || prefix.length > best.prefixLength) {
+      best = { prefixLength: prefix.length, star, pattern, targets };
+    }
+  }
+  if (!best) return null;
+  if (best.star < 0) return best.targets;
+  const suffixLength = best.pattern.length - best.star - 1;
+  const middle = specifier.slice(best.star, specifier.length - suffixLength);
+  return best.targets.map((target) => target.replace("*", middle));
+}
+
+function matchWorkspace(
+  specifier: string,
+  workspaces: Map<string, string>,
+): { dir: string; subpath: string } | null {
+  let best: string | null = null;
+  for (const name of workspaces.keys()) {
+    if (specifier === name || specifier.startsWith(`${name}/`)) {
+      if (!best || name.length > best.length) best = name;
+    }
+  }
+  if (!best) return null;
+  return { dir: workspaces.get(best)!, subpath: specifier.slice(best.length + 1) };
 }
 
 function extractEndpointMapping(node: ts.Expression): { method: string; path: string } | null {

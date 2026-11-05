@@ -1,0 +1,4 @@
+* @relic/core
+src/services/* @relic/services
+src/repositories/* @relic/data
+tests/ @relic/qa

@@ -25,4 +25,5 @@ await build({
 });
 
 cpSync("../dashboard/dist", "dist/dashboard", { recursive: true });
-console.log("bundled dist/cli.js + dist/index.js with dashboard assets");
+cpSync("../../skills", "dist/skills", { recursive: true });
+console.log("bundled dist/cli.js + dist/index.js with dashboard assets and skills");

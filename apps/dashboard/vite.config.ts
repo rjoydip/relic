@@ -16,6 +16,21 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // the header docs link points at the deployed /docs/ path; in dev that
+      // is the VitePress server, so forward instead of 404ing
+      "/docs": {
+        target: "http://127.0.0.1:5174",
+        configure: (proxy) => {
+          proxy.on("error", (_err, _req, res) => {
+            if (res instanceof ServerResponse && !res.headersSent) {
+              res.writeHead(503, { "content-type": "text/html; charset=utf-8" });
+              res.end(
+                "<h1>Docs are starting…</h1><p>Run <code>bun run dev</code> if this persists — it starts the API, dashboard, and docs together.</p>",
+              );
+            }
+          });
+        },
+      },
       "/api": {
         target: apiTarget,
         configure: (proxy) => {

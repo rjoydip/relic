@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   CodeBlock,
   CodeBlockContent,
   CodeBlockCopyButton,
   CodeBlockLine,
 } from "@/components/ui/code-block";
+import { FileCodeIcon, XIcon } from "lucide-react";
+import { Hint } from "@/components/ui/tooltip";
 import { useHighlightedCode } from "@/hooks/use-highlighted-code";
 import { api } from "./api";
 
@@ -33,6 +42,11 @@ const EXT_ALIAS: Record<string, string> = {
 const langOf = (path: string) => {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   return EXT_ALIAS[ext] ?? ext;
+};
+
+const splitPath = (path: string) => {
+  const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return i < 0 ? { dir: "", name: path } : { dir: path.slice(0, i), name: path.slice(i + 1) };
 };
 
 export function CodeModal({ repoId, code, onClose }: CodeModalProps) {
@@ -68,12 +82,21 @@ export function CodeModal({ repoId, code, onClose }: CodeModalProps) {
     if (content === null) return;
     bodyRef.current
       ?.querySelector('[data-variant="highlighted"]')
-      ?.scrollIntoView({ block: "center" });
+      ?.scrollIntoView({ block: "center", inline: "nearest" });
   }, [content]);
 
   const start = code.startLine;
   const end = code.endLine ?? code.startLine;
+  const range =
+    start === null || end === null
+      ? null
+      : start === end
+        ? `line ${start}`
+        : `lines ${start}–${end}`;
   const hit = (n: number) => start !== null && end !== null && n >= start && n <= end;
+
+  const { dir, name } = splitPath(code.path);
+  const lineCount = content === null ? null : content.replace(/\n$/, "").split("\n").length;
 
   return (
     <Dialog
@@ -82,27 +105,56 @@ export function CodeModal({ repoId, code, onClose }: CodeModalProps) {
         if (!open) onClose();
       }}
     >
-      <DialogContent className="left-[calc(50%-4vw)] flex max-h-[85vh] w-[min(1040px,calc(100vw-2rem))] flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 gap-1 px-4 pt-4 pb-3">
-          <DialogTitle className="truncate font-mono text-sm" title={code.path}>
-            {code.path}
-          </DialogTitle>
-          {start !== null && (
-            <p className="text-xs text-muted-foreground">
-              lines {start}–{end ?? start}
-            </p>
-          )}
-        </DialogHeader>
-        <div ref={bodyRef} className="min-h-0 flex-1">
+      {/* file viewer: toolbar + code surface + status bar, not a small dialog */}
+      <DialogContent
+        showCloseButton={false}
+        className="code-modal gap-0 overflow-hidden p-0 sm:max-w-none"
+      >
+        <header className="code-modal-head">
+          <span className="code-modal-icon" aria-hidden="true">
+            <FileCodeIcon />
+          </span>
+          <div className="code-modal-file">
+            <Hint side="bottom" label={code.path}>
+              <DialogTitle className="code-modal-name">{name}</DialogTitle>
+            </Hint>
+            <Hint side="bottom" label={code.path}>
+              <span className="code-modal-path mono">{dir || "./"}</span>
+            </Hint>
+          </div>
+          <div className="code-modal-meta">
+            <span className="code-chip">{langOf(code.path) || "text"}</span>
+            {range && (
+              <Hint label="Highlighted in the file">
+                <span className="code-chip code-chip-accent">{range}</span>
+              </Hint>
+            )}
+            {lineCount !== null && <span className="code-chip">{lineCount} lines</span>}
+          </div>
+          <div className="code-modal-actions">
+            {content !== null && <CodeBlockCopyButton value={content} />}
+            <Hint label="Close">
+              <DialogClose render={<Button variant="ghost" size="icon-sm" aria-label="Close" />}>
+                <XIcon />
+              </DialogClose>
+            </Hint>
+          </div>
+        </header>
+        <DialogDescription className="sr-only">
+          Contents of {code.path}
+          {range ? `, ${range}` : ""}
+        </DialogDescription>
+
+        <div ref={bodyRef} className="code-modal-body">
           {error ? (
-            <p className="px-4 pb-4 text-sm text-[var(--red)]">{error}</p>
+            <p className="code-modal-error">{error}</p>
           ) : content === null ? (
-            <div className="flex items-center justify-center p-10">
+            <div className="code-modal-loading">
               <div className="spinner" />
+              <span>Loading file…</span>
             </div>
           ) : (
             <CodeBlock className="h-full rounded-none border-0">
-              <CodeBlockCopyButton value={content} className="m-2" />
               <CodeBlockContent lineNumbers className="flex-1">
                 {lines.map((line, i) => (
                   <CodeBlockLine key={i} variant={hit(i + 1) ? "highlighted" : "default"}>
@@ -113,6 +165,16 @@ export function CodeModal({ repoId, code, onClose }: CodeModalProps) {
             </CodeBlock>
           )}
         </div>
+
+        <footer className="code-modal-foot">
+          <Hint side="top" label={code.path}>
+            <span className="code-modal-foot-path mono">{code.path}</span>
+          </Hint>
+          <span className="code-modal-hint">{range ? `focused on ${range}` : "whole file"}</span>
+          <span className="code-modal-hint code-modal-esc">
+            <kbd>Esc</kbd> to close
+          </span>
+        </footer>
       </DialogContent>
     </Dialog>
   );

@@ -1,7 +1,7 @@
 import { sha1 } from "./discovery";
 
-/** Stable node identity. See PLAN.md §5.1: identity derives from repository,
- * path, qualified name — not line numbers (they change on edit).
+/** Stable node identity. See docs/index.md (graph model): identity derives from
+ * repository, path, qualified name — not line numbers (they change on edit).
  * ponytail: symbol kind is not part of the id, so overloaded functions
  * collapse into one node; add kind to the key when overload reporting matters. */
 export const repositoryNodeId = (repositoryId: string): string =>

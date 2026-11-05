@@ -198,6 +198,53 @@ describe("dashboard API", () => {
     expect(body.error).toBe("INVALID_INPUT");
     expect(body.message).toContain("Ambiguous symbol: User");
   });
+
+  it("exports, re-imports, and deletes a graph snapshot", async () => {
+    const snapshot = await json<{
+      format: string;
+      version: number;
+      nodes: Array<{ id: string }>;
+      edges: unknown[];
+    }>(await app.request(`/api/repositories/${repoId}/snapshot`));
+    expect(snapshot.format).toBe("relic-snapshot");
+    expect(snapshot.version).toBe(1);
+    expect(snapshot.nodes.length).toBeGreaterThan(0);
+    expect(snapshot.edges.length).toBeGreaterThan(0);
+
+    const imported = await json<{ repositoryId: string; nodeCount: number; edgeCount: number }>(
+      await app.request("/api/snapshot", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(snapshot),
+      }),
+    );
+    expect(imported.repositoryId).toBe(repoId);
+    expect(imported.nodeCount).toBe(snapshot.nodes.length);
+
+    const list = await json<{ repositories: Array<{ id: string }> }>(
+      await app.request("/api/repositories"),
+    );
+    expect(list.repositories.some((r) => r.id === imported.repositoryId)).toBe(true);
+
+    const bad = await app.request("/api/snapshot", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ format: "nope", version: 2 }),
+    });
+    expect(bad.status).toBe(400);
+
+    const del = await app.request(`/api/repositories/${repoId}`, { method: "DELETE" });
+    expect(del.status).toBe(200);
+    const after = await json<{ repositories: Array<{ id: string }> }>(
+      await app.request("/api/repositories"),
+    );
+    expect(after.repositories.some((r) => r.id === repoId)).toBe(false);
+
+    expect((await app.request(`/api/repositories/${repoId}/snapshot`)).status).toBe(404);
+    expect((await app.request(`/api/repositories/${repoId}`, { method: "DELETE" })).status).toBe(
+      404,
+    );
+  });
 });
 
 describe("dashboard API — allowed roots", () => {
@@ -273,5 +320,40 @@ describe("index source (paths and GitHub URLs)", () => {
     expect(github.status).toBe(400);
     expect((await json<{ error: string }>(github)).error).toBe("PATH_ESCAPE");
     scoped.graph.close();
+  });
+
+  it("publishes graph-updated events over SSE", async () => {
+    const events: unknown[] = [];
+    const listener = (payload: unknown): void => {
+      events.push(payload);
+    };
+    app.events.on("graph-updated", listener);
+    try {
+      const res = await app.request(`/api/repositories/${repoId}/index`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ root: fixture.root }),
+      });
+      expect(res.status).toBe(200);
+    } finally {
+      app.events.off("graph-updated", listener);
+    }
+    expect(events).toHaveLength(1);
+
+    const stream = await app.request("/api/events");
+    expect(stream.status).toBe(200);
+    const reader = stream.body!.getReader();
+    app.events.emit("graph-updated", {
+      repositoryId: repoId,
+      nodeCount: 1,
+      edgeCount: 2,
+      revision: null,
+      indexedAt: "now",
+    });
+    const chunk = await reader.read();
+    const text = new TextDecoder().decode(chunk.value);
+    expect(text).toContain("event: graph-updated");
+    expect(text).toContain(repoId);
+    await reader.cancel();
   });
 });

@@ -1,11 +1,20 @@
 import { defineConfig } from "vitepress";
 
+const base = "/docs/";
+
 export default defineConfig({
   title: "Relic",
   description: "Static dependency-graph engine for TypeScript repositories",
+  // The dashboard Worker serves the docs under /docs/, so the header link can
+  // stay relative and no separate hostname has to be configured.
+  base,
+  outDir: "../apps/dashboard/dist/docs",
   cleanUrls: true,
   appearance: true,
+  vite: { server: { host: "127.0.0.1", port: 5174, strictPort: true } },
+  head: [["link", { rel: "icon", type: "image/svg+xml", href: `${base}logo.svg` }]],
   themeConfig: {
+    logo: { light: "/logo.svg", dark: "/logo-dark.svg" },
     darkModeSwitchLabel: "Appearance",
     lightModeSwitchTitle: "Switch to light theme",
     darkModeSwitchTitle: "Switch to dark theme",

@@ -1,0 +1,52 @@
+name: Relic PR impact
+description: Comment the blast radius and related tests for a pull request using the Relic dependency graph.
+inputs:
+  base:
+    description: Base revision to diff against (for example origin/main)
+    required: false
+    default: ""
+  head:
+    description: Head revision to diff (defaults to the working tree)
+    required: false
+    default: ""
+  pr-number:
+    description: Pull request number (defaults to the event PR)
+    required: false
+    default: ""
+  github-token:
+    description: Token with pull-requests write access
+    required: false
+    default: ${{ github.token }}
+  relic-command:
+    description: Command that invokes the Relic CLI
+    required: false
+    default: bunx --bun relic-graph
+
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - name: Build the impact report
+      shell: bash
+      run: |
+        set -euo pipefail
+        read -ra relic <<< "${{ inputs.relic-command }}"
+        args=(pr)
+        if [ -n "${{ inputs.base }}" ]; then args+=(--base "${{ inputs.base }}"); fi
+        if [ -n "${{ inputs.head }}" ]; then args+=(--head "${{ inputs.head }}"); fi
+        "${relic[@]}" "${args[@]}" > "$RUNNER_TEMP/relic-impact.md"
+
+    - name: Comment on the pull request
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+      run: |
+        set -euo pipefail
+        pr="${PR_NUMBER:-${{ github.event.pull_request.number }}}"
+        if [ -z "$pr" ]; then echo "No pull request number available"; exit 1; fi
+        gh pr comment "$pr" --body-file "$RUNNER_TEMP/relic-impact.md" --edit-last --create-if-none \
+          || gh pr comment "$pr" --body-file "$RUNNER_TEMP/relic-impact.md"

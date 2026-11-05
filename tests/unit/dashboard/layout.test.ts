@@ -2,8 +2,22 @@ import { describe, expect, test } from "bun:test";
 import type { GraphEdgeDto, GraphNodeDto } from "../../../apps/dashboard/src/api";
 import { layoutGraph } from "../../../apps/dashboard/src/layout";
 
-function node(id: string, name: string, type = "symbol"): GraphNodeDto {
-  return { id, name, type, qualifiedName: null, filePath: "f.ts", startLine: null, endLine: null };
+function node(
+  id: string,
+  name: string,
+  type = "symbol",
+  metadata?: Record<string, unknown>,
+): GraphNodeDto {
+  return {
+    id,
+    name,
+    type,
+    qualifiedName: null,
+    filePath: "f.ts",
+    startLine: null,
+    endLine: null,
+    ...(metadata ? { metadata } : {}),
+  };
 }
 
 function edge(sourceId: string, targetId: string): GraphEdgeDto {
@@ -49,12 +63,28 @@ describe("layoutGraph", () => {
     expect(pos.get("m")?.y).toBe(84);
     expect(pos.get("o")?.y).toBe(168);
     expect(pos.get("a")?.y).toBeLessThan(pos.get("c")?.y as number);
-    expect(pos.get("t")?.x).toBe(960);
+    expect(pos.get("t")?.x).toBe(640);
   });
 
-  test("unknown types fall into the default column", () => {
+  test("unknown types fall into the code lane", () => {
     const pos = layoutGraph([node("x", "X", "mystery")], []);
-    expect(pos.get("x")?.x).toBe(640);
+    expect(pos.get("x")?.x).toBe(0);
+  });
+
+  test("symbols get one column per analyzer kind", () => {
+    const pos = layoutGraph(
+      [
+        node("c", "C", "symbol", { kind: "class" }),
+        node("m", "M", "symbol", { kind: "method" }),
+        node("f", "F", "symbol", { kind: "function" }),
+        node("v", "V", "symbol", { kind: "variable" }),
+      ],
+      [],
+    );
+    expect(pos.get("c")?.x).toBe(0);
+    expect(pos.get("m")?.x).toBe(320);
+    expect(pos.get("f")?.x).toBe(640);
+    expect(pos.get("v")?.x).toBe(960);
   });
 
   test("is deterministic regardless of input order", () => {

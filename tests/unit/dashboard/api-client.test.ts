@@ -75,3 +75,69 @@ test("indexSource posts the source body", async () => {
   expect(call.init?.method).toBe("POST");
   expect(JSON.parse(String(call.init?.body))).toEqual({ source: "C:/code" });
 });
+
+test("snapshot endpoints encode the repository and delete with DELETE", async () => {
+  mockFetch(() => Response.json({ format: "relic-snapshot", version: 1 }));
+  await api.snapshot("r 1");
+  expect(calls[0]?.url).toBe("/api/repositories/r%201/snapshot");
+
+  await api.deleteRepository("r/1");
+  expect(calls[1]?.url).toBe("/api/repositories/r%2F1");
+  expect(calls[1]?.init?.method).toBe("DELETE");
+});
+
+test("importSnapshot posts the snapshot body", async () => {
+  mockFetch(() => Response.json({ repositoryId: "r", nodeCount: 0, edgeCount: 0 }));
+  const snapshot = {
+    format: "relic-snapshot" as const,
+    version: 1 as const,
+    repository: {
+      name: "r",
+      rootPath: "/tmp/r",
+      lastRevision: null,
+      indexedAt: null,
+      durationMs: null,
+      fileCount: 0,
+      diagnostics: [],
+    },
+    nodes: [],
+    edges: [],
+  };
+  await api.importSnapshot(snapshot);
+  const call = calls[0]!;
+  expect(call.url).toBe("/api/snapshot");
+  expect(call.init?.method).toBe("POST");
+  expect(JSON.parse(String(call.init?.body))).toEqual(snapshot);
+});
+
+test("cycles and impact build their requests", async () => {
+  mockFetch(() => Response.json({ cycles: [], nodeCount: 0 }));
+  await api.cycles("r 1");
+  expect(calls[0]?.url).toBe("/api/cycles?repository=r%201");
+  expect(api.eventsUrl()).toBe("/api/events");
+
+  calls = [];
+  mockFetch(() => Response.json({}));
+  await api.impact("r 1", "node/1");
+  const call = calls[0]!;
+  expect(call.url).toBe("/api/impact");
+  expect(call.init?.method).toBe("POST");
+  expect(JSON.parse(String(call.init?.body))).toEqual({
+    repository: "r 1",
+    nodeId: "node/1",
+    includeTests: undefined,
+    includeIndirectDependencies: undefined,
+    maxDepth: undefined,
+  });
+
+  calls = [];
+  mockFetch(() => Response.json({}));
+  await api.impact("r", "n", { includeTests: false, includeIndirect: true, maxDepth: 2 });
+  expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+    repository: "r",
+    nodeId: "n",
+    includeTests: false,
+    includeIndirectDependencies: true,
+    maxDepth: 2,
+  });
+});

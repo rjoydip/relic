@@ -25,6 +25,9 @@ Facts over guesses. Prefer graph answers to grep/read; never invent relationship
 - "what does X use" -> `find_dependencies`
 - "which tests cover X" -> `find_related_tests`
 - "how does A reach B" -> `get_dependency_path(from, to)`
+- "is there a dependency cycle" -> `find_cycles`
+- "who owns this file/symbol" -> `get_owners`
+- "what looks unused" -> `find_dead_code` (heuristic; opt-in, not a gate)
 - "review this change" -> `analyze_git_diff(base, head)`, then `analyze_impact`
   on each changed target
 - Cheap context without a tool call -> resources

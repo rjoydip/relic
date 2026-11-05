@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/public/logo.svg" alt="Relic" width="128" height="128" />
+</p>
+
 # Relic
 
 Static dependency-graph engine for TypeScript repositories, exposed three ways: an MCP server (for coding agents), a Hono HTTP API, and a React Flow dashboard.
@@ -13,7 +17,7 @@ packages/
   analyzer-typescript/    TypeScript Compiler API analyzer (2 passes: extract, resolve)
   indexer/                incremental indexing (hash change detection, importer re-expansion)
 apps/
-  mcp-server/             MCP stdio server: 10 tools, 3 resources, 2 prompts
+  mcp-server/             MCP stdio server: 13 tools, 3 resources, 2 prompts
   api/                    Hono API + the publishable package: `relic` CLI and `relic-mcp` bins
   dashboard/              React + React Flow graph explorer
 tests/
@@ -28,7 +32,7 @@ bun install
 bun run typecheck   # tsc (3 projects)
 bun run lint        # oxlint --deny-warnings
 bun run test        # bun test
-bun run build       # tsc + vite dashboard + esbuild bundle (apps/api/dist)
+bun run build       # tsc + vite dashboard + docs + esbuild bundle (apps/api/dist)
 bun run ci          # format:check && lint && typecheck && test:coverage && build
 ```
 
@@ -45,7 +49,7 @@ npm install -g relic-graph   # provides `relic` and `relic-mcp`
 
 On startup the server auto-indexes `RELIC_ROOT` (or `RELIC_REPOSITORY`, or the launch directory), so tools answer immediately; `index_repository` stays available for other projects.
 
-Tools: `index_repository`, `search_symbols`, `get_symbol_details`, `find_dependents`, `find_dependencies`, `analyze_impact`, `get_dependency_path`, `find_related_tests`, `analyze_git_diff`, `get_graph_summary`.
+Tools: `index_repository`, `search_symbols`, `get_symbol_details`, `find_dependents`, `find_dependencies`, `find_cycles`, `find_dead_code`, `get_owners`, `analyze_impact`, `get_dependency_path`, `find_related_tests`, `analyze_git_diff`, `get_graph_summary`.
 
 Example client config (Claude Code / Cursor / Cline / Windsurf all use the same shape):
 
@@ -77,6 +81,8 @@ npx skills add . -g -a claude-code -y  # global, non-interactive
 
 `npx skills list` shows what is installed. See the [skills docs](https://www.skills.sh/docs) for supported agents and options.
 
+`relic init` does the same setup non-interactively: it merges `.mcp.json` (pointing at this repository) and writes `skills/relic/SKILL.md`. Re-running it is a no-op; `--force` replaces a modified skill.
+
 Ask things like:
 
 - "What is affected if I change `UserService.updateUser`?"
@@ -88,25 +94,106 @@ Ask things like:
 ```sh
 relic                          # index cwd, serve API + UI, open the browser
 relic /path/to/repo            # index a specific project
-relic --port 9000 --no-open    # options: --port, --db, --no-open
+relic --port 9000 --no-open    # options: --port, --db, --no-open, --watch
 relic index /path/to/repo      # one-shot for agents/scripts: index, print
                                # IndexResult JSON on stdout, exit non-zero on
                                # failure (logs go to stderr)
 ```
 
+`--watch` re-indexes incrementally on file changes and pushes `graph-updated`
+events over SSE (`/api/events`), so open dashboards refresh without a reload.
+Branch switches are not detected as a single event — run `relic index` (or
+restart `relic`) after a checkout.
+
+### Impact, export, check, init, PR reports
+
+```sh
+relic impact UserService.updateUser --json       # blast radius + risk score
+relic export --format mermaid > graph.mmd        # mermaid | dot
+relic check                                      # boundary rules, exit 1 on violation
+relic init                                       # .mcp.json + skills/relic/SKILL.md
+relic pr --base origin/main --head HEAD          # Markdown blast radius for a PR
+relic diff before.json after.json --check        # snapshot drift
+```
+
+Boundary rules live in `.relicrc.json` (or `relic.config.json`); each rule
+matches importer/imported paths and defaults to `IMPORTS` edges:
+
+```json
+{
+  "boundaries": [
+    { "from": "src/ui/**", "to": "src/database/**", "message": "UI must not import database" }
+  ]
+}
+```
+
 The MCP server is the primary agent interface; `relic index` gives agents and CI a headless way to bootstrap the same graph DB the dashboard and API read.
+
+### Comment impact on pull requests
+
+`.github/actions/relic-pr` is a composite action that runs `relic pr`, writes
+the Markdown report, and posts it with `gh pr comment`. It needs a checkout
+with `fetch-depth: 0`, `contents: read`, and `pull-requests: write`; source
+code never leaves the runner, only symbol names, paths, and test names.
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+steps:
+  - uses: actions/checkout@v4
+    with: { fetch-depth: 0 }
+  - uses: ./.github/actions/relic-pr
+    with:
+      base: origin/${{ github.base_ref }}
+      head: HEAD
+```
+
+This repository dogfoods it in `.github/workflows/relic-pr.yml`.
 
 The dashboard's index bar (empty state and header) accepts a local path or a GitHub URL — GitHub sources are shallow-cloned into a temp dir (re-pulled on re-index) and never run code.
 
 Dev mode with HMR:
 
 ```sh
-bun run dev:api                          # http://127.0.0.1:8787
-# in another shell:
-bun run dev:dashboard                    # http://127.0.0.1:5173, proxies /api to :8787
+bun run dev            # API :8787 + dashboard :5173 + docs :5174
 ```
 
+The dashboard proxies `/api` to the API and `/docs/` to the docs server.
+`bun run build` builds the docs into the dashboard output too, so the packaged
+`relic` command serves them at `/docs/`.
+
 The API rejects repository paths outside `allowedRoots` (`PATH_ESCAPE`) and caps pagination; SQL is fully parameterized (see `tests/security/`).
+
+## Deployment
+
+The dashboard and docs ship as one assets-only Cloudflare Worker, managed by
+[Alchemy](https://alchemy.run): dashboard at `/`, docs at `/docs/`.
+
+```sh
+bun run site:build   # dashboard + docs -> apps/dashboard/dist
+bun run deploy       # alchemy deploy
+```
+
+The first deploy needs an Alchemy state store on the account — run
+`bun alchemy state bootstrap` once (CI sets `CI=true`, which refuses to create
+it implicitly). `.github/workflows/deploy.yml` builds and deploys on pushes to
+`main` using `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`.
+
+Only the static surface is deployed. The API stays local: it depends on
+`node:sqlite`, child processes and filesystem indexing, none of which run in a
+Worker. The deployed dashboard detects the missing API, disables indexing and
+re-indexing, and lets you load a Relic snapshot file entirely in the browser to
+explore a graph read-only.
+
+To use indexing on a deployed dashboard, host the API somewhere that can run
+Node (container or VM) and build the dashboard with its origin:
+
+```sh
+VITE_RELIC_API_URL=https://relic-api.example.com bun run site:build
+```
+
+The build then calls `https://relic-api.example.com/api/*` instead of `/api/*`.
 
 ## Indexing semantics
 

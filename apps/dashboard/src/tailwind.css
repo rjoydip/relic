@@ -18,7 +18,7 @@
   --color-popover: var(--panel);
   --color-popover-foreground: var(--text);
   --color-primary: var(--accent);
-  --color-primary-foreground: #ffffff;
+  --color-primary-foreground: var(--accent-ink);
   --color-secondary: var(--panel-2);
   --color-secondary-foreground: var(--text);
   --color-muted: var(--panel-2);
@@ -274,6 +274,11 @@
 
   .cn-popover-description {
     @apply text-muted-foreground;
+  }
+
+  /* MARK: Tooltip */
+  .cn-tooltip-content {
+    @apply rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs leading-relaxed text-popover-foreground shadow-md;
   }
 
   /* MARK: Toggle */

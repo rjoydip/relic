@@ -54,11 +54,14 @@ describe("MCP protocol over stdio", () => {
     expect(tools.tools.map((t) => t.name).sort()).toEqual([
       "analyze_git_diff",
       "analyze_impact",
+      "find_cycles",
+      "find_dead_code",
       "find_dependencies",
       "find_dependents",
       "find_related_tests",
       "get_dependency_path",
       "get_graph_summary",
+      "get_owners",
       "get_symbol_details",
       "index_repository",
       "search_symbols",
@@ -153,6 +156,36 @@ describe("MCP protocol over stdio", () => {
       results: unknown[];
     };
     expect(search.results.length).toBeGreaterThan(0);
+
+    const details = parse(
+      await call("get_symbol_details", { symbol: "UserService.updateUser" }),
+    ) as {
+      excerpt: {
+        filePath: string;
+        lines: Array<{ line: number; text: string }>;
+        truncated: boolean;
+      } | null;
+    };
+    expect(details.excerpt?.filePath).toBe("src/services/user.ts");
+    expect(details.excerpt!.lines.some((l) => l.text.includes("updateUser"))).toBe(true);
+    expect(details.excerpt!.truncated).toBe(false);
+
+    const cycles = parse(await call("find_cycles")) as {
+      cycles: Array<{ size: number; nodes: Array<{ qualifiedName: string | null }> }>;
+    };
+    expect(
+      cycles.cycles.some(
+        (cycle) => cycle.size === 2 && cycle.nodes.some((n) => n.qualifiedName === "cycleA"),
+      ),
+    ).toBe(true);
+
+    const owners = parse(await call("get_owners", { symbol: "UserService.updateUser" })) as {
+      owners: string[];
+      blame: unknown;
+    };
+    expect(owners.owners).toEqual(["@relic/services"]);
+    expect(owners.blame).toBeNull(); // fixture copies are not git repositories
+
     const summary = parse(await call("get_graph_summary")) as { counts: { edges: number } };
     expect(summary.counts.edges).toBeGreaterThan(15);
     const tests = parse(await call("find_related_tests", { symbol: "UserService.updateUser" })) as {

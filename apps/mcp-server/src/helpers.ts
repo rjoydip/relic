@@ -1,78 +1,54 @@
-import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import type { GraphNode, NodeType } from "@relic/graph-core";
 import { GraphError } from "@relic/graph-core";
 import { repositoryIdFor } from "@relic/analyzer-typescript";
+import { changedRanges, symbolsForRanges, type ChangedRange } from "@relic/indexer";
 
-export interface ChangedRange {
+export { changedRanges, symbolsForRanges };
+export type { ChangedRange };
+
+/** Hard cap: the agent reads a window, never the whole file. */
+export const MAX_EXCERPT_LINES = 80;
+
+export interface SourceExcerpt {
   filePath: string;
-  lines: number[];
+  startLine: number;
+  endLine: number;
+  totalLines: number;
+  lines: Array<{ line: number; text: string }>;
+  truncated: boolean;
 }
 
-/** Read `git diff --unified=0 <base> <head>` with argument-based execution
- * (never shell interpolation) and map hunks to new-side line ranges. */
-export function changedRanges(rootPath: string, base?: string, head?: string): ChangedRange[] {
-  const args = ["diff", "--unified=0"];
-  if (base) args.push(base);
-  if (head) args.push(head);
-  let out: string;
+/** Bounded, line-numbered source window for a node, read from the indexed repo. */
+export function sourceExcerpt(rootPath: string, node: GraphNode): SourceExcerpt | null {
+  if (!node.filePath || node.startLine == null) return null;
+  const root = resolve(rootPath);
+  const abs = resolve(join(root, node.filePath));
+  const rel = relative(root, abs);
+  if (!rel || rel.startsWith("..") || isAbsolute(rel)) return null;
+  let text: string;
   try {
-    out = execFileSync("git", args, {
-      cwd: rootPath,
-      encoding: "utf8",
-      maxBuffer: 16 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-  } catch (err) {
-    throw new GraphError(
-      "INVALID_INPUT",
-      `git diff failed: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
-    );
+    text = readFileSync(abs, "utf8");
+  } catch {
+    return null;
   }
-  const ranges: ChangedRange[] = [];
-  let current: ChangedRange | null = null;
-  for (const line of out.split("\n")) {
-    if (line.startsWith("+++ b/")) {
-      const rel = line.slice(6).trim();
-      current = { filePath: rel === "/dev/null" ? "" : rel, lines: [] };
-      if (current.filePath) ranges.push(current);
-      else current = null;
-      continue;
-    }
-    if (line.startsWith("@@") && current) {
-      const match = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
-      if (match) {
-        const start = Number(match[1]);
-        const count = match[2] === undefined ? 1 : Number(match[2]);
-        if (count === 0) current.lines.push(Math.max(1, start - 1));
-        else for (let i = 0; i < count; i++) current.lines.push(start + i);
-      }
-    }
+  const all = text.split(/\r?\n/);
+  const start = Math.max(1, node.startLine);
+  const declaredEnd = Math.min(node.endLine ?? start, all.length);
+  const end = Math.min(declaredEnd, start + MAX_EXCERPT_LINES - 1);
+  const lines: SourceExcerpt["lines"] = [];
+  for (let line = start; line <= end; line++) {
+    lines.push({ line, text: all[line - 1] ?? "" });
   }
-  return ranges;
-}
-
-/** Symbols whose declared line range intersects the changed lines. */
-export function symbolsForRanges(nodes: GraphNode[], ranges: ChangedRange[]): GraphNode[] {
-  const targets: GraphNode[] = [];
-  const seen = new Set<string>();
-  for (const range of ranges) {
-    const changed = new Set(range.lines);
-    for (const node of nodes) {
-      if (seen.has(node.id)) continue;
-      if (node.type !== "symbol" || !node.filePath || node.filePath !== range.filePath) continue;
-      const start = node.startLine;
-      const end = node.endLine;
-      if (start == null || end == null) continue;
-      for (let line = start; line <= end; line++) {
-        if (changed.has(line)) {
-          seen.add(node.id);
-          targets.push(node);
-          break;
-        }
-      }
-    }
-  }
-  return targets;
+  return {
+    filePath: node.filePath,
+    startLine: start,
+    endLine: end,
+    totalLines: Math.max(0, declaredEnd - start + 1),
+    lines,
+    truncated: end < declaredEnd,
+  };
 }
 
 export function coerceRepositoryId(

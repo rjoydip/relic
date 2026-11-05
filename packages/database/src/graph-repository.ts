@@ -447,6 +447,27 @@ export class SqliteGraphRepository implements GraphRepository {
     }));
   }
 
+  /** Full graph for a snapshot file — no pagination, unlike listNodes/getEdges. */
+  snapshot(repositoryId: string): {
+    meta: RepositoryMeta;
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+  } | null {
+    const meta = this.getRepository(repositoryId);
+    if (!meta) return null;
+    const nodes = (
+      this.db
+        .prepare("SELECT * FROM nodes WHERE repository_id = ? ORDER BY id")
+        .all(repositoryId) as unknown as NodeRow[]
+    ).map(toNode);
+    const edges = (
+      this.db
+        .prepare("SELECT * FROM edges WHERE repository_id = ? ORDER BY id")
+        .all(repositoryId) as unknown as EdgeRow[]
+    ).map(toEdge);
+    return { meta, nodes, edges };
+  }
+
   counts(repositoryId: string): { nodes: number; edges: number } {
     const nodes = (
       this.db

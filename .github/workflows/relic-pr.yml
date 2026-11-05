@@ -1,0 +1,26 @@
+name: relic-pr
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  impact:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - uses: ./.github/actions/relic-pr
+        with:
+          base: origin/${{ github.base_ref }}
+          head: HEAD
+          relic-command: bun run apps/api/src/cli.ts

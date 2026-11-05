@@ -180,6 +180,7 @@ describe("GraphService.analyzeImpact", () => {
     expect(byId.get("outer")?.depth).toBe(2);
     expect(byId.get("route1")?.depth).toBe(1);
     expect(byId.get("test1")?.depth).toBe(1);
+    expect(byId.get("caller")?.direction).toBe("upstream");
     expect(result.summary.affectedSymbols).toBeGreaterThanOrEqual(2);
     expect(result.summary.affectedTests).toBe(1);
     expect(result.summary.unresolvedRelationships).toBe(1);
@@ -210,6 +211,7 @@ describe("GraphService.analyzeImpact", () => {
     const { service } = fixture();
     const result = service.analyzeImpact(REPO, "target", { includeIndirect: true });
     expect(result.affected.map((a) => a.node.id)).toContain("dep");
+    expect(result.affected.find((a) => a.node.id === "dep")?.direction).toBe("downstream");
   });
 
   it("throws NODE_NOT_FOUND for unknown targets", () => {
@@ -221,13 +223,11 @@ describe("GraphService.analyzeImpact", () => {
 describe("GraphService traversal helpers", () => {
   it("finds dependents and dependencies", () => {
     const { service } = fixture();
-    expect(
-      service
-        .findDependents(REPO, "target", 3)
-        .map((n) => n.id)
-        .sort(),
-    ).toEqual(["caller", "outer", "route1", "test1"]);
-    expect(service.findDependencies(REPO, "target", 3).map((n) => n.id)).toEqual(["dep"]);
+    const dependents = service.findDependents(REPO, "target", 3);
+    expect(dependents.map((s) => s.node.id).sort()).toEqual(["caller", "outer", "route1", "test1"]);
+    // Evidence travels with each step, not just the node.
+    expect(dependents.every((s) => s.depth > 0 && s.edge.evidence !== undefined)).toBe(true);
+    expect(service.findDependencies(REPO, "target", 3).map((s) => s.node.id)).toEqual(["dep"]);
   });
 
   it("finds related tests directly and via callers", () => {
@@ -261,5 +261,75 @@ describe("GraphService traversal helpers", () => {
     const details = service.getSymbolDetails(REPO, "target");
     expect(details.incoming.map((i) => i.edge.type).sort()).toEqual(["CALLS", "EXPOSES", "TESTS"]);
     expect(details.outgoing.map((o) => o.edge.type)).toEqual(["READS"]);
+  });
+});
+
+function exportedNode(id: string, filePath: string): GraphNode {
+  const n = node(id, id, "symbol", filePath);
+  n.metadata = { kind: "function", exported: true };
+  return n;
+}
+
+describe("GraphService analytics", () => {
+  it("finds strongly connected components and ignores acyclic tails", () => {
+    const { repo, service } = fixture();
+    for (const id of ["c1", "c2", "c3"]) repo.upsertNode(node(id, id));
+    repo.upsertEdge(edge("c1", "c2", "CALLS"));
+    repo.upsertEdge(edge("c2", "c1", "CALLS"));
+    repo.upsertEdge(edge("c2", "c3", "CALLS"));
+    const report = service.findCycles(REPO);
+    expect(report.cycles).toHaveLength(1);
+    expect(report.cycles[0]?.size).toBe(2);
+    expect(report.cycles[0]?.nodes.map((n) => n.id).sort()).toEqual(["c1", "c2"]);
+    expect(report.cycles[0]?.edges).toHaveLength(2);
+    expect(report.nodeCount).toBe(2);
+  });
+
+  it("scores impact deterministically with a factor breakdown", () => {
+    const { service } = fixture();
+    const risk = service.analyzeImpact(REPO, "target").summary.risk;
+    expect(risk.score).toBeGreaterThan(0);
+    expect(risk.score).toBeLessThanOrEqual(100);
+    expect(risk.factors.reduce((sum, factor) => sum + factor.points, 0)).toBe(risk.score);
+    expect(risk.factors.map((factor) => factor.key)).toEqual([
+      "affected",
+      "depth",
+      "inferred",
+      "missingTests",
+      "routeExposure",
+    ]);
+    expect(risk.factors.find((factor) => factor.key === "routeExposure")?.points).toBe(20);
+  });
+
+  it("reports per-node and aggregate coupling", () => {
+    const { service } = fixture();
+    const metric = service.getNodeCoupling(REPO, "target");
+    expect(metric.fanIn).toBe(3); // caller, test1, route1
+    expect(metric.fanOut).toBe(1); // dep
+    expect(metric.instability).toBe(0.25);
+
+    const report = service.getCouplingReport(REPO);
+    expect(report.mostCoupled.length).toBeGreaterThan(0);
+    expect(report.averageInstability).toBeGreaterThanOrEqual(0);
+    expect(service.getSummary(REPO).coupling.mostCoupled.length).toBeGreaterThan(0);
+  });
+
+  it("finds unused exports and excludes entrypoints and tests", () => {
+    const { repo, service } = fixture();
+    repo.upsertNode(exportedNode("unused", "src/lib.ts"));
+    repo.upsertNode(exportedNode("used", "src/lib.ts"));
+    repo.upsertNode(exportedNode("entry", "src/index.ts"));
+    repo.upsertNode(exportedNode("tested", "tests/x.test.ts"));
+    repo.upsertEdge(edge("caller", "used", "CALLS"));
+
+    const report = service.findDeadCode(REPO);
+    const ids = report.entries.map((entry) => entry.node.id);
+    expect(ids).toContain("unused");
+    expect(ids).not.toContain("used");
+    expect(ids).not.toContain("entry");
+    expect(ids).not.toContain("tested");
+    expect(
+      service.findDeadCode(REPO, { includeTests: true }).entries.map((e) => e.node.id),
+    ).toContain("tested");
   });
 });

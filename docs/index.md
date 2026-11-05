@@ -13,12 +13,12 @@ Ask "what breaks if I change `UserService.updateUser`?" and get an evidence-back
 source file, line, confidence (`static` 1.0 vs `inferred` 0.6), and a note explaining how it was resolved.
 Calls that cannot be resolved become diagnostics; they never become invented edges.
 
-- **MCP server** — 10 tools, 3 resources and 2 prompts over stdio, for Claude Code, Cursor, Cline, Windsurf,
+- **MCP server** — 13 tools, 3 resources and 2 prompts over stdio, for Claude Code, Cursor, Cline, Windsurf,
   or any MCP client.
 - **CLI** — `relic` indexes a project, serves the API + dashboard, and opens a browser. `relic index` is the
-  headless variant for scripts and CI.
-- **Dashboard** — React + React Flow explorer with node search, neighbourhood expansion, code peek and
-  impact analysis.
+  headless variant for scripts and CI; `relic diff a.json b.json --check` fails on snapshot drift.
+- **Dashboard** — React + React Flow explorer with node search, neighbourhood expansion, code peek,
+  impact analysis (risk score, coupling, owners) and cycle highlighting.
 - **Library** — `graph-core` (domain + traversal + impact), `database` (SQLite repository), `analyzer-typescript`
   (2-pass analyzer), `indexer` (incremental orchestration).
 
@@ -85,18 +85,21 @@ built the bundle.
 
 ### Tools
 
-| Tool                  | Inputs                                                                                      | Returns                                                       |
-| --------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `index_repository`    | `repository?`, `revision?`                                                                  | `IndexResult` (counts, duration, diagnostics)                 |
-| `search_symbols`      | `query`, `type?`, `repository?`                                                             | Matching nodes + count                                        |
-| `get_symbol_details`  | `nodeId?` or `symbol?`, `repository?`                                                       | Definition, incoming/outgoing edges, evidence                 |
-| `analyze_impact`      | `nodeId?` or `symbol?`, `maxDepth?` (1–10), `includeTests?`, `includeIndirectDependencies?` | Affected nodes with relationship, depth, confidence, evidence |
-| `find_dependents`     | `nodeId?` or `symbol?`, `maxDepth?` (default 3)                                             | Reverse dependencies (who depends on this)                    |
-| `find_dependencies`   | `nodeId?` or `symbol?`, `maxDepth?` (default 3)                                             | Forward dependencies (what this depends on)                   |
-| `find_related_tests`  | `nodeId?` or `symbol?`, `repository?`                                                       | Tests linked by `TESTS` edges + one hop back                  |
-| `analyze_git_diff`    | `base?` (default `HEAD`), `head?` (default working tree), `maxDepth?`                       | Changed files, changed targets, transitive impact             |
-| `get_dependency_path` | `from`, `to`, `repository?`                                                                 | Shortest known relationship path                              |
-| `get_graph_summary`   | `repository?`                                                                               | Repository meta, node/edge counts, diagnostics                |
+| Tool                  | Inputs                                                                                      | Returns                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `index_repository`    | `repository?`, `revision?`                                                                  | `IndexResult` (counts, duration, diagnostics)                              |
+| `search_symbols`      | `query`, `type?`, `repository?`                                                             | Matching nodes + count                                                     |
+| `get_symbol_details`  | `nodeId?` or `symbol?`, `repository?`                                                       | Definition, incoming/outgoing edges with evidence, ≤80-line source excerpt |
+| `analyze_impact`      | `nodeId?` or `symbol?`, `maxDepth?` (1–10), `includeTests?`, `includeIndirectDependencies?` | Affected nodes with relationship, depth, confidence, evidence              |
+| `find_dependents`     | `nodeId?` or `symbol?`, `maxDepth?` (default 3)                                             | Reverse traversal steps: node, edge, depth, evidence                       |
+| `find_dependencies`   | `nodeId?` or `symbol?`, `maxDepth?` (default 3)                                             | Forward traversal steps: node, edge, depth, evidence                       |
+| `find_related_tests`  | `nodeId?` or `symbol?`, `repository?`                                                       | Tests linked by `TESTS` edges + one hop back                               |
+| `find_cycles`         | `repository?`                                                                               | SCCs (size ≥ 2) with nodes and internal edges over `IMPORTS`/`CALLS`       |
+| `find_dead_code`      | `repository?`, `includeTests?`                                                              | Exported symbols with zero incoming usage edges (opt-in heuristic)         |
+| `get_owners`          | `nodeId?` or `symbol?`, `repository?`                                                       | CODEOWNERS owners plus a git-blame author summary                          |
+| `analyze_git_diff`    | `base?` (default `HEAD`), `head?` (default working tree), `maxDepth?`                       | Changed files, changed targets, transitive impact                          |
+| `get_dependency_path` | `from`, `to`, `repository?`                                                                 | Shortest known relationship path                                           |
+| `get_graph_summary`   | `repository?`                                                                               | Repository meta, counts, diagnostics, coupling report                      |
 
 Symbols resolve by exact name or qualified name; an ambiguous name fails with the first five matches and asks
 for `nodeId`. Errors are returned as `ERROR [CODE]: message` with `isError: true`.
@@ -114,15 +117,44 @@ for `nodeId`. Errors are returned as `ERROR [CODE]: message` with `isError: true
 ```sh
 relic                          # index cwd, serve API + UI, open the browser
 relic /path/to/repo            # index a specific project
-relic --port 9000 --no-open    # --port, --db, --no-open
+relic --port 9000 --no-open    # --port, --db, --no-open, --watch
 relic index /path/to/repo      # one-shot: index, print IndexResult JSON on
                                # stdout, exit non-zero on failure
+relic impact <symbol> --json   # blast radius + deterministic risk score
+relic export --format mermaid  # mermaid | dot
+relic check                    # architecture boundary rules, exit 1 on violation
+relic init                     # merge .mcp.json + write skills/relic/SKILL.md
+relic pr --base origin/main    # Markdown impact report for a pull request
+relic diff a.json b.json --check
 ```
 
 - Server binds `127.0.0.1` only; `--no-open` skips launching the browser.
 - Port: `--port`, else `PORT`, else `8787`.
 - Database: `--db`, else `RELIC_DB`, else `<tmpdir>/relic.db`. The MCP server, CLI, API and dashboard share it.
 - `relic index` writes JSON to stdout and logs to stderr, which is what agents and CI consume.
+- `--watch` re-indexes incrementally on changes and pushes `graph-updated` SSE events. Branch switches are not detected — run `relic index` after a checkout.
+
+### Boundary rules
+
+`relic check` reads `.relicrc.json` (or `relic.config.json`, or `--config <file>`):
+
+```json
+{
+  "boundaries": [
+    { "from": "src/ui/**", "to": "src/database/**", "message": "UI must not import database" }
+  ]
+}
+```
+
+Rules match importer/imported repo-relative paths (`*`, `**`, `?`) and default to `IMPORTS`; set
+`"edgeTypes": ["CALLS"]` to check calls instead. Violations print the offending files and evidence, and the
+command exits 1.
+
+### Pull request comments
+
+`.github/actions/relic-pr` runs `relic pr`, then posts the Markdown report with `gh pr comment`. It needs
+`fetch-depth: 0`, `contents: read`, and `pull-requests: write`. Only symbol names, paths, test names, and
+evidence locations are sent — no source text.
 
 ## HTTP API
 
@@ -141,6 +173,8 @@ All routes are under `/api`. `repository` accepts either a repository id or a fi
 | GET    | `/graph/nodes/:id`                  | Single node                                                                                     |
 | GET    | `/graph/nodes/:id/neighborhood`     | `depth` (1–4, default 1), `limit`; forward + reverse traversal                                  |
 | POST   | `/impact`                           | Body `{ repository, nodeId \| symbol, maxDepth?, includeTests?, includeIndirectDependencies? }` |
+| GET    | `/cycles?repository=`               | Strongly connected components over `IMPORTS`/`CALLS`                                            |
+| GET    | `/events`                           | SSE stream: `graph-updated` after every index/re-index                                          |
 | GET    | `/tests/related?repository=&nodeId= | symbol=`                                                                                        | Tests linked to a node |
 
 Pagination is capped at 5000 rows. Errors come back as `{ "error": "<CODE>", "message": "…" }` with `400`
@@ -153,9 +187,12 @@ they are rejected when the API is configured with `allowedRoots`.
 ## Dashboard
 
 ```sh
-bun run dev:api        # http://127.0.0.1:8787
-bun run dev:dashboard  # http://127.0.0.1:5173, proxies /api to :8787
+bun run dev            # starts API :8787, dashboard :5173, docs :5174
 ```
+
+The dashboard proxies `/api` to the API and `/docs/` to the docs server, so
+`http://127.0.0.1:5173/docs/` works in dev. `bun run build` also builds the docs
+into the dashboard output, and `relic` serves them at `/docs/`.
 
 The UI supports searching nodes, expanding a neighbourhood, poking at source code, and running impact
 analysis. Its index bar accepts a local path or a GitHub URL.
@@ -229,7 +266,7 @@ bun run typecheck   # tsc (3 projects)
 bun run lint        # oxlint --deny-warnings
 bun run test        # bun test
 bun run test:e2e    # playwright (isolated API port + temp DB)
-bun run build       # tsc + vite dashboard + esbuild bundles in apps/api/dist
+bun run build       # tsc + vite dashboard + docs + esbuild bundles in apps/api/dist
 bun run ci          # format:check + lint + typecheck + test:coverage + build
 ```
 

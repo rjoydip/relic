@@ -1,11 +1,14 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { streamSSE } from "hono/streaming";
 import { GraphError } from "@relic/graph-core";
-import type { EdgeType, NodeType } from "@relic/graph-core";
+import type { EdgeType, GraphEdge, GraphNode, NodeType, RepositoryMeta } from "@relic/graph-core";
 import { openGraph, repositoryIdFor, type OpenGraph } from "@relic/indexer";
 
 export interface ApiOptions {
@@ -14,7 +17,49 @@ export interface ApiOptions {
   allowedRoots?: string[];
 }
 
+export interface GraphUpdateEvent {
+  repositoryId: string;
+  nodeCount: number;
+  edgeCount: number;
+  revision: string | null;
+  indexedAt: string | null;
+}
+
+export type RelicApp = Hono & { graph: OpenGraph; events: EventEmitter };
+
 const MAX_LIMIT = 5000;
+
+/** Snapshot file: the full graph of one repository, portable between machines. */
+interface SnapshotBody {
+  format?: string;
+  version?: number;
+  repository?: {
+    name?: string;
+    rootPath?: string;
+    lastRevision?: string | null;
+    indexedAt?: string | null;
+    durationMs?: number | null;
+    fileCount?: number;
+    diagnostics?: RepositoryMeta["diagnostics"];
+  };
+  nodes?: Array<{
+    id: string;
+    type: NodeType;
+    name: string;
+    qualifiedName?: string | null;
+    filePath?: string | null;
+    startLine?: number | null;
+    endLine?: number | null;
+  }>;
+  edges?: Array<{
+    id: string;
+    sourceId: string;
+    targetId: string;
+    type: EdgeType;
+    confidence?: number;
+    evidence?: GraphEdge["evidence"];
+  }>;
+}
 
 function limitOf(raw: string | undefined, fallback = 50): number {
   const value = Number(raw ?? fallback);
@@ -53,10 +98,14 @@ function ensureGitHubClone(url: string): string {
   return dir;
 }
 
-export function buildApp(options: ApiOptions): Hono & { graph: OpenGraph } {
+export function buildApp(options: ApiOptions): RelicApp {
   const store = openGraph(options.dbPath);
-  const app = new Hono() as Hono & { graph: OpenGraph };
+  const app = new Hono() as RelicApp;
   app.graph = store;
+  app.events = new EventEmitter();
+  app.events.setMaxListeners(0); // one listener per open SSE stream
+  // the dashboard can be hosted separately (static Worker, Vite on another port)
+  app.use("/api/*", cors());
 
   const fail = (
     c: { json: (body: unknown, status: number) => Response },
@@ -103,9 +152,58 @@ export function buildApp(options: ApiOptions): Hono & { graph: OpenGraph } {
     return meta;
   };
 
+  const indexAndNotify = (root: string, revision?: string | null) => {
+    const result = store.indexer.index(root, revision !== undefined ? { revision } : {});
+    const payload: GraphUpdateEvent = {
+      repositoryId: result.repositoryId,
+      nodeCount: result.nodeCount,
+      edgeCount: result.edgeCount,
+      revision: result.revision,
+      indexedAt: new Date().toISOString(),
+    };
+    app.events.emit("graph-updated", payload);
+    return result;
+  };
+
+  app.get("/api/events", (c) =>
+    streamSSE(c, async (stream) => {
+      let closed = false;
+      const listener = (payload: GraphUpdateEvent): void => {
+        void stream.writeSSE({
+          event: "graph-updated",
+          data: JSON.stringify(payload),
+        });
+      };
+      app.events.on("graph-updated", listener);
+      stream.onAbort(() => {
+        closed = true;
+        app.events.off("graph-updated", listener);
+      });
+      while (!closed) {
+        await stream.sleep(20_000);
+        if (closed) break;
+        // keep-alive so proxies do not drop an idle stream
+        await stream.writeSSE({ event: "ping", data: "{}" });
+      }
+    }),
+  );
+
   app.get("/api/repositories", (c) =>
     c.json({ repositories: store.repository.listRepositories() }),
   );
+
+  // Drop an indexed repository (snapshot cache) from the local store.
+  app.delete("/api/repositories/:id", (c) => {
+    try {
+      const id = c.req.param("id");
+      if (!store.repository.getRepository(id))
+        throw new GraphError("REPOSITORY_NOT_FOUND", `Repository not indexed: ${id}`);
+      store.repository.deleteRepository(id);
+      return c.json({ deleted: id });
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
 
   app.get("/api/repositories/:id/summary", (c) => {
     try {
@@ -123,7 +221,7 @@ export function buildApp(options: ApiOptions): Hono & { graph: OpenGraph } {
       const root = body.root ?? meta?.rootPath;
       if (!root) throw new GraphError("INVALID_INPUT", "repository root is required for indexing");
       assertAllowed(resolve(root));
-      return c.json(store.indexer.index(root));
+      return c.json(indexAndNotify(root));
     } catch (err) {
       return fail(c, err);
     }
@@ -164,7 +262,130 @@ export function buildApp(options: ApiOptions): Hono & { graph: OpenGraph } {
         root = resolve(source);
         assertAllowed(root);
       }
-      return c.json(store.indexer.index(root));
+      return c.json(indexAndNotify(root));
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  // Full graph as a portable snapshot file (no pagination, unlike the UI APIs).
+  app.get("/api/repositories/:id/snapshot", (c) => {
+    try {
+      const id = c.req.param("id");
+      const snap = store.repository.snapshot(id);
+      if (!snap) throw new GraphError("REPOSITORY_NOT_FOUND", `Repository not indexed: ${id}`);
+      return c.json({
+        format: "relic-snapshot",
+        version: 1,
+        repository: {
+          name: snap.meta.name,
+          rootPath: snap.meta.rootPath,
+          lastRevision: snap.meta.lastRevision,
+          indexedAt: snap.meta.indexedAt,
+          durationMs: snap.meta.indexingDurationMs,
+          fileCount: snap.meta.fileCount,
+          diagnostics: snap.meta.diagnostics,
+        },
+        nodes: snap.nodes.map((n) => ({
+          id: n.id,
+          type: n.type,
+          name: n.name,
+          qualifiedName: n.qualifiedName ?? null,
+          filePath: n.filePath ?? null,
+          startLine: n.startLine ?? null,
+          endLine: n.endLine ?? null,
+        })),
+        edges: snap.edges.map((e) => ({
+          id: e.id,
+          sourceId: e.sourceId,
+          targetId: e.targetId,
+          type: e.type,
+          confidence: e.confidence,
+          evidence: e.evidence,
+        })),
+      });
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  // Load a snapshot into the local store so the normal graph APIs can render it.
+  app.post("/api/snapshot", async (c) => {
+    try {
+      const body = await c.req.json<SnapshotBody>();
+      if (body.format !== "relic-snapshot" || body.version !== 1)
+        throw new GraphError("INVALID_INPUT", "Unsupported snapshot format");
+      const nodes = body.nodes ?? [];
+      const edges = body.edges ?? [];
+      if (!Array.isArray(nodes) || !Array.isArray(edges))
+        throw new GraphError("INVALID_INPUT", "Snapshot nodes/edges must be arrays");
+
+      const rootPath = body.repository?.rootPath ?? "";
+      const id = repositoryIdFor(rootPath || body.repository?.name || "snapshot");
+      const now = new Date().toISOString();
+      const meta: RepositoryMeta = {
+        id,
+        name: body.repository?.name ?? "snapshot",
+        rootPath,
+        lastRevision: body.repository?.lastRevision ?? null,
+        indexedAt: body.repository?.indexedAt ?? now,
+        indexingDurationMs: body.repository?.durationMs ?? null,
+        fileCount:
+          body.repository?.fileCount ?? new Set(nodes.map((n) => n.filePath).filter(Boolean)).size,
+        nodeCount: nodes.length,
+        edgeCount: edges.length,
+        diagnostics: body.repository?.diagnostics ?? [],
+      };
+      const graphNodes: GraphNode[] = nodes.map((n) => ({
+        id: n.id,
+        repositoryId: id,
+        type: n.type,
+        name: n.name,
+        qualifiedName: n.qualifiedName ?? null,
+        filePath: n.filePath ?? null,
+        startLine: n.startLine ?? null,
+        endLine: n.endLine ?? null,
+        metadata: {},
+        contentHash: null,
+        updatedAt: now,
+      }));
+      const graphEdges: GraphEdge[] = edges.map((e) => ({
+        id: e.id,
+        repositoryId: id,
+        sourceId: e.sourceId,
+        targetId: e.targetId,
+        type: e.type,
+        confidence: e.confidence ?? 0.6,
+        evidence: e.evidence ?? { source: "static" },
+      }));
+
+      // replaceRepositoryGraph is file-oriented: a file owns its nodes and its
+      // outgoing edges, so bucket both by the source node's file path.
+      const buckets = new Map<
+        string,
+        { filePath: string; nodes: GraphNode[]; edges: GraphEdge[] }
+      >();
+      const bucket = (filePath: string) => {
+        let b = buckets.get(filePath);
+        if (!b) {
+          b = { filePath, nodes: [], edges: [] };
+          buckets.set(filePath, b);
+        }
+        return b;
+      };
+      const nodeFile = new Map<string, string>();
+      for (const n of graphNodes) {
+        nodeFile.set(n.id, n.filePath ?? "");
+        bucket(n.filePath ?? "").nodes.push(n);
+      }
+      for (const e of graphEdges) bucket(nodeFile.get(e.sourceId) ?? "").edges.push(e);
+
+      store.repository.replaceRepositoryGraph({ meta, files: [...buckets.values()] });
+      return c.json({
+        repositoryId: id,
+        nodeCount: graphNodes.length,
+        edgeCount: graphEdges.length,
+      });
     } catch (err) {
       return fail(c, err);
     }
@@ -289,6 +510,16 @@ export function buildApp(options: ApiOptions): Hono & { graph: OpenGraph } {
       if (body.includeIndirectDependencies !== undefined)
         opts.includeIndirect = body.includeIndirectDependencies;
       return c.json(store.graph.analyzeImpact(repository, nodeId, opts));
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  app.get("/api/cycles", (c) => {
+    try {
+      const repository = resolveRepo(c.req.query("repository"));
+      requireIndex(repository);
+      return c.json(store.graph.findCycles(repository));
     } catch (err) {
       return fail(c, err);
     }

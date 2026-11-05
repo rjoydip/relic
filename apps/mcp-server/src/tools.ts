@@ -1,7 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { GraphNode, GraphService, Indexer, SqliteGraphRepository } from "./deps";
 import { GraphError } from "@relic/graph-core";
-import { changedRanges, coerceNodeType, coerceRepositoryId, symbolsForRanges } from "./helpers";
+import { blameRange, loadCodeowners, ownersFor } from "@relic/analyzer-typescript";
+import {
+  changedRanges,
+  coerceNodeType,
+  coerceRepositoryId,
+  sourceExcerpt,
+  symbolsForRanges,
+} from "./helpers";
 import { z } from "zod";
 
 export interface ToolDeps {
@@ -128,7 +135,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     "get_symbol_details",
     {
       description:
-        "Return a node's definition, incoming relationships, and outgoing dependencies with evidence.",
+        "Return a node's definition, incoming relationships, outgoing dependencies with evidence, and a bounded source excerpt.",
       inputSchema: {
         repository: z.string().optional(),
         nodeId: z.string().optional(),
@@ -139,7 +146,12 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
       run(() => {
         const repo = repoId(path);
         const target = resolveTarget(repo, nodeId, symbol);
-        return graph.getSymbolDetails(repo, target.id);
+        const details = graph.getSymbolDetails(repo, target.id);
+        const meta = repository.getRepository(repo);
+        return {
+          ...details,
+          excerpt: meta ? sourceExcerpt(meta.rootPath, details.node) : null,
+        };
       }),
   );
 
@@ -231,6 +243,72 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
         const repo = repoId(path);
         const target = resolveTarget(repo, nodeId, symbol);
         return { tests: graph.findRelatedTests(repo, target.id) };
+      }),
+  );
+
+  server.registerTool(
+    "find_cycles",
+    {
+      description:
+        "Find dependency cycles: strongly connected components over IMPORTS/CALLS by default.",
+      inputSchema: {
+        repository: z.string().optional(),
+      },
+    },
+    async ({ repository: path }) =>
+      run(() => {
+        const repo = repoId(path);
+        return graph.findCycles(repo);
+      }),
+  );
+
+  server.registerTool(
+    "find_dead_code",
+    {
+      description:
+        "List exported symbols with no incoming CALLS/IMPORTS/USES_OPERATION/EXPOSES. Opt-in heuristic, not a gate.",
+      inputSchema: {
+        repository: z.string().optional(),
+        includeTests: z
+          .boolean()
+          .optional()
+          .describe("Include symbols declared in test files (default false)"),
+      },
+    },
+    async ({ repository: path, includeTests }) =>
+      run(() => {
+        const repo = repoId(path);
+        return graph.findDeadCode(repo, includeTests === undefined ? {} : { includeTests });
+      }),
+  );
+
+  server.registerTool(
+    "get_owners",
+    {
+      description:
+        "Return CODEOWNERS owners for a node plus a git-blame author summary for its line range.",
+      inputSchema: {
+        repository: z.string().optional(),
+        nodeId: z.string().optional(),
+        symbol: z.string().optional(),
+      },
+    },
+    async ({ repository: path, nodeId, symbol }) =>
+      run(() => {
+        const repo = repoId(path);
+        const target = resolveTarget(repo, nodeId, symbol);
+        const meta = repository.getRepository(repo)!;
+        const stored = Array.isArray(target.metadata.owners)
+          ? target.metadata.owners.filter((owner): owner is string => typeof owner === "string")
+          : [];
+        const owners =
+          stored.length > 0 || !target.filePath
+            ? stored
+            : ownersFor(loadCodeowners(meta.rootPath), target.filePath);
+        const blame = target.filePath
+          ? blameRange(meta.rootPath, target.filePath, target.startLine, target.endLine)
+          : null;
+        return { node: target, owners, blame };
       }),
   );
 

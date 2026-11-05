@@ -1,0 +1,7 @@
+{
+  "name": "alias-fixture",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}

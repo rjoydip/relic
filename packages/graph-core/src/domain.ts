@@ -119,6 +119,8 @@ export interface ImpactResult {
   affected: Array<{
     node: GraphNode;
     relationship: EdgeType;
+    /** upstream = breaks when the target changes; downstream = the target depends on it. */
+    direction: "upstream" | "downstream";
     depth: number;
     confidence: number;
     evidence: Evidence;
@@ -128,5 +130,51 @@ export interface ImpactResult {
     affectedTests: number;
     unresolvedRelationships: number;
     maxDepth: number;
+    risk: RiskAssessment;
   };
+}
+
+/** Deterministic blast-radius score; factors always sum to `score`. */
+export interface RiskAssessment {
+  score: number;
+  factors: RiskFactor[];
+}
+
+export interface RiskFactor {
+  key: "affected" | "depth" | "inferred" | "missingTests" | "routeExposure";
+  label: string;
+  points: number;
+}
+
+/** Coupling for one node: fan-in/out over distinct neighbours. */
+export interface CouplingMetric {
+  node: GraphNode;
+  fanIn: number;
+  fanOut: number;
+  /** Ce / (Ca + Ce), 0 = stable, 1 = unstable. */
+  instability: number;
+}
+
+export interface CouplingReport {
+  averageInstability: number;
+  mostCoupled: CouplingMetric[];
+}
+
+/** A strongly connected component of size >= 2. */
+export interface GraphCycle {
+  id: string;
+  size: number;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface CycleReport {
+  cycles: GraphCycle[];
+  /** Nodes participating in at least one cycle. */
+  nodeCount: number;
+}
+
+export interface DeadCodeEntry {
+  node: GraphNode;
+  fanIn: number;
 }
