@@ -1,13 +1,6 @@
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileTree, useFileTree } from "@pierre/trees/react";
+import { flushSync } from "react-dom";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -24,19 +17,35 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { FolderTreeIcon, ListIcon, MoonIcon, SunIcon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  BookOpenIcon,
+  DownloadIcon,
+  FolderGit2Icon,
+  FolderTreeIcon,
+  LinkIcon,
+  ListIcon,
+  MoonIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  PanelRightOpenIcon,
+  SunIcon,
+  Trash2Icon,
+  UploadIcon,
+} from "lucide-react";
 import {
   api,
   type GraphEdgeDto,
   type GraphNodeDto,
   type IndexStatusDto,
   type Repository,
+  type Snapshot,
 } from "./api";
 import { GraphCanvas } from "./GraphCanvas";
 import { CodeModal, type CodeTarget } from "./CodeModal";
 import { COLOR } from "./layout";
+import { Logo } from "./Logo";
 import { NodeInspector } from "./NodeInspector";
 import { TREE_ICONS, treeThemeStyles } from "./theme";
 import { ancestorsOf, buildTree } from "./tree";
@@ -50,26 +59,6 @@ const NODE_TYPES = [
   "test",
   "file",
   "queue",
-];
-
-// curated to carry white button text in both themes
-const ACCENTS = [
-  "#5e8bff",
-  "#8b5cf6",
-  "#ec4899",
-  "#f43f5e",
-  "#f59e0b",
-  "#22c55e",
-  "#14b8a6",
-  "#0ea5e9",
-  "#6366f1",
-  "#7c3aed",
-  "#c026d3",
-  "#e11d48",
-  "#ea580c",
-  "#d97706",
-  "#65a30d",
-  "#059669",
 ];
 
 function passesFilter(n: GraphNodeDto, query: string, typeFilter: string): boolean {
@@ -98,34 +87,58 @@ export function App() {
     localStorage.getItem("relic-explorer") === "flat" ? "flat" : "tree",
   );
   const [error, setError] = useState<string | null>(null);
+  // deployed as static assets only (Cloudflare) — no API behind /api
+  const [staticMode, setStaticMode] = useState(false);
+  // client-side snapshot (static deployments have no API to import into)
+  const [snapshotRepo, setSnapshotRepo] = useState<Repository | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [explorerOpen, setExplorerOpen] = useState(true);
+  // node visit trail for back/forward navigation in the details panel
+  const [trail, setTrail] = useState<{ ids: string[]; index: number }>({
+    ids: [],
+    index: -1,
+  });
+  const [focusToken, setFocusToken] = useState(0);
   const [theme, setTheme] = useState<"dark" | "light">(() =>
     localStorage.getItem("relic-theme") === "light" ? "light" : "dark",
   );
-  const [accent, setAccent] = useState(() => localStorage.getItem("relic-accent") ?? "");
-  const [accentOpen, setAccentOpen] = useState(false);
   const [code, setCode] = useState<CodeTarget | null>(null);
+
+  const toggleTheme = useCallback(() => {
+    const next = theme === "dark" ? "light" : "dark";
+    const doc = document as Document & {
+      startViewTransition?: (update: () => void) => void;
+    };
+    if (doc.startViewTransition)
+      doc.startViewTransition(() => {
+        // flush so the transition snapshots the *new* palette
+        flushSync(() => setTheme(next));
+      });
+    else setTheme(next);
+  }, [theme]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("relic-theme", theme);
+    // the accent picker is gone — drop its persisted value so a stale pink
+    // accent from an older build can never override the monochrome theme
+    localStorage.removeItem("relic-accent");
+    document.documentElement.style.removeProperty("--accent");
   }, [theme]);
-
-  useEffect(() => {
-    if (accent) {
-      document.documentElement.style.setProperty("--accent", accent);
-      localStorage.setItem("relic-accent", accent);
-    } else {
-      document.documentElement.style.removeProperty("--accent");
-      localStorage.removeItem("relic-accent");
-    }
-  }, [accent]);
 
   useEffect(() => {
     localStorage.setItem("relic-explorer", explorerView);
   }, [explorerView]);
 
-  const repo = repositories.find((r) => r.id === repoId) ?? null;
+  const repo = snapshotRepo ?? repositories.find((r) => r.id === repoId) ?? null;
+
+  // Breadcrumb shows the last few path segments so the repo folder (the part
+  // that identifies it) survives truncation; the full path is in the title.
+  const pathSegments = (repo?.rootPath ?? "")
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .filter((seg) => !/^[0-9a-f]{8,}$/.test(seg));
+  const shownSegments = pathSegments.slice(-3);
 
   // panel only exists when open AND something is selected — otherwise the
   // graph takes the full width (and no empty inspector column is reserved)
@@ -138,6 +151,7 @@ export function App() {
     setSelected(null);
     setQuery("");
     setTypeFilter("");
+    setTrail({ ids: [], index: -1 });
     setError(null);
     setCode(null);
   }, [repoId]);
@@ -163,7 +177,10 @@ export function App() {
           await loadGraph(list.repositories[0].id);
         }
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err: unknown) => {
+        if (err instanceof Error && /Request failed \(404\)/.test(err.message)) setStaticMode(true);
+        setError(err instanceof Error ? err.message : String(err));
+      })
       .finally(() => setLoading(false));
   }, [loadGraph]);
 
@@ -205,6 +222,7 @@ export function App() {
         setRepoId(result.repositoryId);
         await loadGraph(result.repositoryId);
       } catch (err) {
+        if (err instanceof Error && /Request failed \(404\)/.test(err.message)) setStaticMode(true);
         setError(err instanceof Error ? err.message : String(err));
       } finally {
         setIndexing(false);
@@ -214,7 +232,10 @@ export function App() {
   );
 
   const selectNode = useCallback(
-    (id: string) => {
+    (id: string, fromGraph = false) => {
+      // clicking a card must not pan the graph; only navigation from the tree,
+      // search or inspector asks the canvas to focus the node
+      if (!fromGraph) setFocusToken((t) => t + 1);
       const found = nodes.find((n) => n.id === id);
       // a selection the current filters would hide defeats the point of
       // navigating to it — drop the filters instead
@@ -223,10 +244,14 @@ export function App() {
         setTypeFilter("");
       }
       setInspectorOpen(true);
-      // clicking a file anywhere (tree, flat list, canvas card) pops the
-      // code viewer — symbols only fill the inspector
-      if (found?.type === "file" && found.filePath)
-        setCode({ path: found.filePath, startLine: found.startLine, endLine: found.endLine });
+      setTrail((t) => {
+        const ids = t.ids.slice(0, t.index + 1);
+        if (ids[ids.length - 1] === id) return t;
+        const next = [...ids, id].slice(-50);
+        return { ids: next, index: next.length - 1 };
+      });
+      // the file viewer is opt-in (icon button in the inspector), never a
+      // side effect of selecting a node
       if (found) setSelected(found);
       else
         void api
@@ -235,6 +260,124 @@ export function App() {
           .catch(() => setSelected(null));
     },
     [nodes, query, typeFilter],
+  );
+
+  const navigateTrail = useCallback(
+    (delta: number) => {
+      const index = trail.index + delta;
+      if (index < 0 || index >= trail.ids.length) return;
+      const id = trail.ids[index];
+      if (!id) return;
+      setTrail({ ...trail, index });
+      setInspectorOpen(true);
+      setFocusToken((t) => t + 1);
+      const found = nodes.find((n) => n.id === id);
+      if (found) setSelected(found);
+      else
+        void api
+          .node(id)
+          .then(setSelected)
+          .catch(() => {});
+    },
+    [trail, nodes],
+  );
+
+  // clear the dashboard entirely and land back on the index screen; indexed
+  // repositories stay in the history list below the form
+  const resetView = useCallback(() => {
+    localStorage.removeItem("relic-explorer");
+    setRepoId(null);
+    setSelected(null);
+    setQuery("");
+    setTypeFilter("");
+    setNodes([]);
+    setEdges([]);
+    setStatus(null);
+    setInspectorOpen(true);
+    setExplorerOpen(true);
+    setTrail({ ids: [], index: -1 });
+    setSnapshotRepo(null);
+    setError(null);
+  }, []);
+
+  const removeRepository = useCallback(
+    async (id: string) => {
+      try {
+        await api.deleteRepository(id);
+        setRepositories((list) => list.filter((r) => r.id !== id));
+        if (repoId === id) resetView();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [repoId, resetView],
+  );
+
+  const snapshotInput = useRef<HTMLInputElement>(null);
+
+  const downloadSnapshot = useCallback(async () => {
+    if (!repoId) return;
+    try {
+      const snapshot = await api.snapshot(repoId);
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" }),
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${repo?.name ?? "relic"}-snapshot.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [repoId, repo]);
+
+  const loadSnapshot = useCallback(
+    async (file: File) => {
+      setIndexing(true);
+      setError(null);
+      try {
+        const snapshot = JSON.parse(await file.text()) as Snapshot;
+        if (staticMode) {
+          const id = `snapshot:${snapshot.repository.name}`;
+          setSnapshotRepo({
+            id,
+            name: snapshot.repository.name,
+            rootPath: snapshot.repository.rootPath,
+            lastRevision: snapshot.repository.lastRevision,
+            indexedAt: snapshot.repository.indexedAt,
+            fileCount: snapshot.repository.fileCount,
+            nodeCount: snapshot.nodes.length,
+            edgeCount: snapshot.edges.length,
+          });
+          setRepositories([]);
+          setRepoId(id);
+          setNodes(snapshot.nodes);
+          setEdges(snapshot.edges);
+          setStatus({
+            lastRevision: snapshot.repository.lastRevision,
+            indexedAt: snapshot.repository.indexedAt,
+            durationMs: snapshot.repository.durationMs,
+            fileCount: snapshot.repository.fileCount,
+            nodeCount: snapshot.nodes.length,
+            edgeCount: snapshot.edges.length,
+            diagnostics: snapshot.repository.diagnostics,
+          });
+          return;
+        }
+        const result = await api.importSnapshot(snapshot);
+        const list = await api.repositories();
+        setRepositories(list.repositories);
+        setRepoId(result.repositoryId);
+        await loadGraph(result.repositoryId);
+      } catch (err) {
+        if (err instanceof Error && /Request failed \(404\)/.test(err.message)) setStaticMode(true);
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setIndexing(false);
+      }
+    },
+    [loadGraph, staticMode],
   );
 
   const visibleNodes = useMemo(
@@ -248,12 +391,15 @@ export function App() {
   // and selection logic through a ref instead of a stale closure
   const nav = useRef({ select: selectNode, explorer: explorerTree.map });
   nav.current = { select: selectNode, explorer: explorerTree.map };
+  // set while the inspector drives the tree so it does not bounce selection back
+  const syncingTree = useRef(false);
 
   const explorer = useFileTree({
     paths: explorerTree.paths,
     initialExpansion: "closed",
     icons: TREE_ICONS,
     onSelectionChange: (selected) => {
+      if (syncingTree.current) return;
       const node = nav.current.explorer.get(selected.at(-1) ?? "");
       if (node) nav.current.select(node.id);
     },
@@ -268,33 +414,60 @@ export function App() {
     );
   }, [explorer.model, explorerTree, query]);
 
+  // selecting a node (graph, relationship list, related test) reveals its file
+  useEffect(() => {
+    const file = selected?.filePath;
+    if (!file) return;
+    syncingTree.current = true;
+    try {
+      const parts = file.split("/");
+      let dir = "";
+      for (let i = 0; i < parts.length - 1; i += 1) {
+        dir = dir ? `${dir}/${parts[i]}` : (parts[i] ?? "");
+        const handle = explorer.model.getItem(dir);
+        if (handle && "expand" in handle) handle.expand();
+      }
+      explorer.model.getItem(file)?.select();
+      explorer.model.scrollToPath(file, { focus: true });
+    } catch {
+      // the file is filtered out of the current tree — nothing to focus
+    }
+    // the tree emits synchronously; clear on the next tick just in case
+    setTimeout(() => {
+      syncingTree.current = false;
+    }, 0);
+  }, [selected?.filePath, explorer.model, explorerTree]);
+
   if (loading)
     return (
-      <div className="center">
+      <div className="center-stage">
         <div className="spinner" />
         <span className="muted">Loading graph…</span>
       </div>
     );
-  if (!repositories.length)
-    return (
-      <div className="center">
-        <div className="hero">
-          <h2>Index a repository</h2>
-          <p className="muted">Enter a local path or a GitHub URL to build the graph.</p>
-          <IndexForm busy={indexing} onIndex={runIndex} />
-          {error && <div className="error">{error}</div>}
-        </div>
-      </div>
-    );
+  const brandButton = (
+    <button
+      type="button"
+      className="brand"
+      onClick={resetView}
+      title="Reset dashboard"
+      aria-label="Reset dashboard"
+    >
+      <Logo className="brand-logo" />
+      Relic
+    </button>
+  );
 
-  return (
-    <div className={`app${showInspector ? "" : " inspector-closed"}`}>
-      <header>
-        <strong className="brand">Relic</strong>
-        <IndexForm busy={indexing} onIndex={runIndex} />
+  const headerActions = (
+    <span className="header-actions">
+      <a className="docs-link" href="/docs/" title="Documentation">
+        <BookOpenIcon />
+        <span>Docs</span>
+      </a>
+      {repoId && !staticMode && (
         <Button
-          variant="default"
-          size="sm"
+          variant="ghost"
+          size="icon-sm"
           onClick={() => void reindex()}
           disabled={reindexing}
           title="Re-index repository"
@@ -302,6 +475,117 @@ export function App() {
         >
           {reindexing ? <span className="spinner mini" /> : <RefreshIcon />}
         </Button>
+      )}
+      {repoId && !staticMode && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => void downloadSnapshot()}
+          title="Download snapshot"
+          aria-label="Download snapshot"
+        >
+          <DownloadIcon />
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={toggleTheme}
+        title="Toggle dark / light theme"
+        aria-label="Toggle theme"
+      >
+        {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+      </Button>
+    </span>
+  );
+
+  if (!repoId)
+    return (
+      <div className="app">
+        <header>
+          {brandButton}
+          {headerActions}
+        </header>
+        <div className="center-stage">
+          <div className="hero">
+            <h2>{staticMode ? "Explore a snapshot" : "Build a dependency graph"}</h2>
+            {staticMode ? (
+              <p className="static-note">
+                This hosted dashboard is read-only. Load a <code>.json</code> snapshot exported from
+                Relic to browse its dependency graph — indexing and re-indexing run in the local
+                app. Use <strong>Download snapshot</strong> there to create one.
+              </p>
+            ) : (
+              <>
+                <p className="muted">
+                  Point Relic at a local folder or a public GitHub repository. It maps files,
+                  routes, classes, calls and tests into one graph — local paths never leave your
+                  machine.
+                </p>
+                <IndexForm busy={indexing} onIndex={runIndex} />
+              </>
+            )}
+            <div className="hero-actions">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => snapshotInput.current?.click()}
+                disabled={indexing}
+              >
+                <UploadIcon /> Load snapshot
+              </Button>
+              <input
+                ref={snapshotInput}
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void loadSnapshot(file);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+            {error && !staticMode && <div className="error">{error}</div>}
+            {repositories.length > 0 && (
+              <section className="repo-history">
+                <h3>Indexed repositories ({repositories.length})</h3>
+                <ul>
+                  {repositories.map((r) => (
+                    <li key={r.id}>
+                      <button className="link" onClick={() => switchRepo(r.id)}>
+                        {r.name}
+                      </button>
+                      <span className="muted mono">
+                        {r.fileCount} files · {r.nodeCount} nodes
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="repo-delete"
+                        onClick={() => void removeRepository(r.id)}
+                        title="Delete index"
+                        aria-label={`Delete ${r.name} index`}
+                      >
+                        <Trash2Icon />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+
+  return (
+    <div
+      className={`app${showInspector ? "" : " inspector-closed"}${explorerOpen ? "" : " explorer-closed"}`}
+    >
+      <header>
+        {brandButton}
+        {!staticMode && <IndexForm busy={indexing} onIndex={runIndex} />}
         {/* breadcrumb: full path in faded segments, the repo folder (the
             app name) emphasised; GitHub clones stage into a hashed temp
             dir — that segment never shows */}
@@ -318,189 +602,190 @@ export function App() {
                 />
               </svg>
             </BreadcrumbItem>
-            {(repo?.rootPath ?? "")
-              .split(/[\\/]+/)
-              .filter(Boolean)
-              .filter((seg) => !/^[0-9a-f]{8,}$/.test(seg))
-              .map((seg, i, all) => (
-                <Fragment key={`${seg}-${i}`}>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem>
-                    {i === all.length - 1 ? (
-                      <BreadcrumbPage>{seg}</BreadcrumbPage>
-                    ) : (
-                      <span>{seg}</span>
-                    )}
-                  </BreadcrumbItem>
-                </Fragment>
-              ))}
+            {pathSegments.length > shownSegments.length && (
+              <>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <span className="path-ellipsis">…</span>
+                </BreadcrumbItem>
+              </>
+            )}
+            {shownSegments.map((seg, i) => (
+              <Fragment key={`${seg}-${i}`}>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  {i === shownSegments.length - 1 ? (
+                    <BreadcrumbPage>{seg}</BreadcrumbPage>
+                  ) : (
+                    <span>{seg}</span>
+                  )}
+                </BreadcrumbItem>
+              </Fragment>
+            ))}
           </BreadcrumbList>
         </Breadcrumb>
-        <span className="header-actions">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-            title="Toggle dark / light theme"
-            aria-label="Toggle theme"
-          >
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </Button>
-          <Popover open={accentOpen} onOpenChange={setAccentOpen}>
-            <PopoverTrigger
-              render={
-                <button
-                  className="swatch-btn"
-                  style={{ "--swatch": accent || "#5e8bff" } as CSSProperties}
-                  title="Accent color"
-                  aria-label="Accent color"
-                />
-              }
-            />
-            <PopoverContent align="end" className="accent-pop">
-              {ACCENTS.map((c) => (
-                <button
-                  key={c}
-                  className={`swatch${(accent || "#5e8bff").toLowerCase() === c ? " active" : ""}`}
-                  style={{ "--c": c } as CSSProperties}
-                  onClick={() => {
-                    setAccent(c);
-                    setAccentOpen(false);
-                  }}
-                  aria-label={`Accent ${c}`}
-                />
-              ))}
-              <button
-                className="swatch reset"
-                onClick={() => {
-                  setAccent("");
-                  setAccentOpen(false);
-                }}
-                title="Reset accent"
-              >
-                ↺
-              </button>
-            </PopoverContent>
-          </Popover>
-        </span>
+        {headerActions}
       </header>
 
       <main>
-        <aside className="explorer">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-between font-normal"
-                />
-              }
-            >
-              {repo?.name ?? "Repository"}
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[var(--anchor-width)]">
-              <DropdownMenuRadioGroup
-                value={repoId ?? ""}
-                onValueChange={(id) => id && switchRepo(id)}
-              >
-                {repositories.map((r) => (
-                  <DropdownMenuRadioItem key={r.id} value={r.id}>
-                    {r.name}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <h2>
-            Explorer
-            <ToggleGroup
-              value={[explorerView]}
-              onValueChange={(v) => {
-                const picked = v[0];
-                if (picked === "tree" || picked === "flat") setExplorerView(picked);
-              }}
-              size="sm"
-              variant="outline"
-            >
-              <ToggleGroupItem value="tree" title="File tree" aria-label="File tree">
-                <FolderTreeIcon />
-              </ToggleGroupItem>
-              <ToggleGroupItem value="flat" title="Flat list" aria-label="Flat list">
-                <ListIcon />
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </h2>
-          {/* one organized filter bar: search flexes, type sits fixed beside
-              it — both the same pill height */}
-          <div className="explorer-toolbar">
-            <div className="field">
-              <svg className="field-icon" viewBox="0 0 16 16" aria-hidden="true">
-                <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                <path
-                  d="M10.2 10.2 14 14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <Input
-                placeholder="Search nodes…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                aria-label="Search nodes"
-              />
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-[128px] justify-between font-normal"
-                  />
-                }
-              >
-                {typeFilter ? typeFilter.replace(/_/g, " ") : "All types"}
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[var(--anchor-width)]">
-                <DropdownMenuRadioGroup
-                  value={typeFilter}
-                  onValueChange={(t) => setTypeFilter(t ?? "")}
+        {explorerOpen && (
+          <aside className="explorer">
+            {staticMode ? (
+              <span className="repo-trigger repo-static">
+                <FolderGit2Icon />
+                <span className="repo-trigger-name">{repo?.name ?? "Snapshot"}</span>
+              </span>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-between font-normal"
+                    />
+                  }
                 >
-                  <DropdownMenuRadioItem value="">All types</DropdownMenuRadioItem>
-                  {NODE_TYPES.filter((t) => nodes.some((n) => n.type === t)).map((t) => (
-                    <DropdownMenuRadioItem key={t} value={t}>
-                      {t.replace(/_/g, " ")}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {explorerView === "flat" ? (
-            <ul className="node-list">
-              {visibleNodes.slice(0, 80).map((n) => (
-                <li key={n.id}>
-                  <button className="link" onClick={() => selectNode(n.id)}>
-                    {n.name}
-                  </button>
-                  <span className="pill" style={{ color: COLOR[n.type] ?? "#5d6b7f" }}>
-                    {n.type}
+                  <span className="repo-trigger">
+                    <FolderGit2Icon />
+                    <span className="repo-trigger-name">{repo?.name ?? "Repository"}</span>
+                    {repo && (
+                      <span className="repo-trigger-hash">
+                        ({repo.id.replace(/^repo_/, "").slice(0, 7)})
+                      </span>
+                    )}
                   </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <FileTree
-              model={explorer.model}
-              className="graph-tree"
-              style={treeThemeStyles(theme, accent || "#5e8bff")}
-            />
-          )}
-        </aside>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[var(--anchor-width)]">
+                  <DropdownMenuRadioGroup
+                    value={repoId ?? ""}
+                    onValueChange={(id) => id && switchRepo(id)}
+                  >
+                    {repositories.map((r) => (
+                      <DropdownMenuRadioItem key={r.id} value={r.id}>
+                        <span className="repo-trigger">
+                          <FolderGit2Icon />
+                          <span className="repo-trigger-name">{r.name}</span>
+                          <span className="repo-trigger-hash">
+                            ({r.id.replace(/^repo_/, "").slice(0, 7)})
+                          </span>
+                        </span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <h2>
+              <span className="explorer-title">
+                Explorer <span className="count">{visibleNodes.length}</span>
+              </span>
+              <span className="explorer-actions">
+                <ToggleGroup
+                  value={[explorerView]}
+                  onValueChange={(v) => {
+                    const picked = v[0];
+                    if (picked === "tree" || picked === "flat") setExplorerView(picked);
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  <ToggleGroupItem value="tree" title="File tree" aria-label="File tree">
+                    <FolderTreeIcon />
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="flat" title="Flat list" aria-label="Flat list">
+                    <ListIcon />
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setExplorerOpen(false)}
+                  title="Hide explorer"
+                  aria-label="Hide explorer"
+                >
+                  <PanelLeftCloseIcon />
+                </Button>
+              </span>
+            </h2>
+            {/* one organized filter bar: search flexes, type sits fixed beside
+              it — both the same pill height */}
+            <div className="explorer-toolbar">
+              <div className="field">
+                <svg className="field-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <circle
+                    cx="7"
+                    cy="7"
+                    r="4.2"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  />
+                  <path
+                    d="M10.2 10.2 14 14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <Input
+                  placeholder="Search nodes…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  aria-label="Search nodes"
+                />
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-[142px] justify-between font-normal"
+                    />
+                  }
+                >
+                  {typeFilter ? typeFilter.replace(/_/g, " ") : "All types"}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[var(--anchor-width)]">
+                  <DropdownMenuRadioGroup
+                    value={typeFilter}
+                    onValueChange={(t) => setTypeFilter(t ?? "")}
+                  >
+                    <DropdownMenuRadioItem value="">All types</DropdownMenuRadioItem>
+                    {NODE_TYPES.filter((t) => nodes.some((n) => n.type === t)).map((t) => (
+                      <DropdownMenuRadioItem key={t} value={t}>
+                        {t.replace(/_/g, " ")}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {explorerView === "flat" ? (
+              <ul className="node-list">
+                {visibleNodes.slice(0, 80).map((n) => (
+                  <li key={n.id}>
+                    <button className="link" onClick={() => selectNode(n.id)}>
+                      {n.name}
+                    </button>
+                    <span className="pill" style={{ color: COLOR[n.type] ?? "#5d6b7f" }}>
+                      {n.type}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <FileTree
+                model={explorer.model}
+                className="graph-tree"
+                style={treeThemeStyles(theme)}
+              />
+            )}
+          </aside>
+        )}
 
         <section className="canvas">
           {switching && (
@@ -509,23 +794,37 @@ export function App() {
             </div>
           )}
           {error && <div className="error banner">{error}</div>}
+          {!explorerOpen && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="peek peek-left"
+              onClick={() => setExplorerOpen(true)}
+              title="Show explorer"
+              aria-label="Show explorer"
+            >
+              <PanelLeftOpenIcon />
+            </Button>
+          )}
           {showPeek && (
             <Button
               variant="outline"
               size="sm"
               className="peek"
               onClick={() => setInspectorOpen(true)}
+              title="Show details"
+              aria-label="Show details"
             >
-              ‹ Details
+              <PanelRightOpenIcon />
             </Button>
           )}
           {visibleNodes.length === 0 ? (
-            <div className="center muted">No nodes match the current filters.</div>
+            <div className="center-stage muted">No nodes match the current filters.</div>
           ) : (
             <GraphCanvas
               key={repoId ?? "none"}
               theme={theme}
-              accent={accent || "#5e8bff"}
+              focusToken={focusToken}
               nodes={visibleNodes}
               edges={edges}
               selectedId={selected?.id ?? null}
@@ -538,6 +837,13 @@ export function App() {
           <NodeInspector
             repoId={repoId ?? ""}
             node={selected}
+            offline={staticMode}
+            nodes={nodes}
+            edges={edges}
+            canGoBack={trail.index > 0}
+            canGoForward={trail.index >= 0 && trail.index < trail.ids.length - 1}
+            onBack={() => navigateTrail(-1)}
+            onForward={() => navigateTrail(1)}
             onSelect={selectNode}
             onCollapse={() => setInspectorOpen(false)}
             onOpenCode={setCode}
@@ -604,20 +910,6 @@ function RefreshIcon() {
   );
 }
 
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M8 3.2v9.6M3.2 8h9.6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 function StatIcon({ d }: { d: string }) {
   return (
     <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
@@ -660,12 +952,15 @@ function IndexForm({
         if (value.trim()) void onIndex(value.trim());
       }}
     >
-      <Input
-        placeholder="Path or GitHub URL…"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        aria-label="Repository source"
-      />
+      <div className="index-field">
+        <LinkIcon className="index-field-icon" />
+        <Input
+          placeholder="Path or GitHub URL…"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          aria-label="Repository source"
+        />
+      </div>
       <Button
         type="submit"
         size="sm"
@@ -673,7 +968,7 @@ function IndexForm({
         title="Index repository"
         aria-label="Index repository"
       >
-        {busy ? <span className="spinner mini" /> : <PlusIcon />}
+        {busy ? <span className="spinner mini" /> : <ArrowRightIcon />}
       </Button>
     </form>
   );

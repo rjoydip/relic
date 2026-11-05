@@ -1,34 +1,90 @@
 import type { GraphEdgeDto, GraphNodeDto } from "./api";
 
-export const COLUMN: Record<string, number> = {
-  repository: 0,
-  file: 0,
-  route: 1,
-  api_operation: 1,
-  frontend_operation: 1,
-  queue: 1,
-  symbol: 2,
-  database_table: 3,
-  test: 3,
-  service: 3,
-  deployment: 3,
+/** One lane per analyzer kind — symbols are not lumped into a single column. */
+export type LaneKey =
+  | "files"
+  | "entrypoints"
+  | "class"
+  | "method"
+  | "function"
+  | "variable"
+  | "data";
+
+const LANE_ORDER: LaneKey[] = [
+  "files",
+  "entrypoints",
+  "class",
+  "method",
+  "function",
+  "variable",
+  "data",
+];
+
+export const LANE_LABEL: Record<LaneKey, string> = {
+  files: "Files",
+  entrypoints: "Entrypoints",
+  class: "Classes",
+  method: "Methods",
+  function: "Functions",
+  variable: "Variables",
+  data: "Data & tests",
 };
+
+/** Which pipeline lane a node belongs to. */
+export function laneOf(n: GraphNodeDto): LaneKey {
+  if (n.type === "symbol") {
+    const kind = typeof n.metadata?.kind === "string" ? n.metadata.kind : "";
+    if (kind === "class" || kind === "method" || kind === "function" || kind === "variable")
+      return kind;
+    // unknown symbol kind: the generic code lane
+    return "function";
+  }
+  if (n.type === "file" || n.type === "repository") return "files";
+  if (
+    n.type === "route" ||
+    n.type === "api_operation" ||
+    n.type === "frontend_operation" ||
+    n.type === "queue"
+  )
+    return "entrypoints";
+  if (
+    n.type === "database_table" ||
+    n.type === "test" ||
+    n.type === "service" ||
+    n.type === "deployment"
+  )
+    return "data";
+  return "function";
+}
+
+/** Compact column numbers for the lanes that actually contain nodes. */
+export function laneColumns(nodes: GraphNodeDto[]): Map<LaneKey, number> {
+  const present = new Set(nodes.map(laneOf));
+  const columns = new Map<LaneKey, number>();
+  let column = 0;
+  for (const key of LANE_ORDER) {
+    if (present.has(key)) columns.set(key, column++);
+  }
+  return columns;
+}
 
 export const COLOR: Record<string, string> = {
-  repository: "#8b98aa",
-  file: "#6e8bb5",
-  route: "#4caf7d",
-  api_operation: "#38b2a3",
-  frontend_operation: "#d9a441",
-  queue: "#a97bd9",
-  symbol: "#5b8cff",
-  database_table: "#e06c75",
-  test: "#7cc47f",
-  service: "#8b98aa",
-  deployment: "#8b98aa",
+  repository: "#98a6b5",
+  file: "#79a8e0",
+  route: "#5cbe8a",
+  api_operation: "#57c4b6",
+  frontend_operation: "#d8a94f",
+  queue: "#a58ad8",
+  symbol: "#7d9cf8",
+  database_table: "#e09055",
+  test: "#83ca8a",
+  service: "#98a6b5",
+  deployment: "#98a6b5",
 };
 
-const COL_WIDTH = 320;
+export const NODE_W = 210;
+export const NODE_H = 44;
+export const COL_WIDTH = 320;
 const ROW_HEIGHT = 84;
 
 /**
@@ -42,10 +98,11 @@ export function layoutGraph(
   nodes: GraphNodeDto[],
   edges: GraphEdgeDto[],
 ): Map<string, { x: number; y: number }> {
+  const columns = laneColumns(nodes);
   const colOf = new Map<string, number>();
   const groups = new Map<number, GraphNodeDto[]>();
   for (const n of nodes) {
-    const col = COLUMN[n.type] ?? 2;
+    const col = columns.get(laneOf(n)) ?? 0;
     colOf.set(n.id, col);
     const group = groups.get(col);
     if (group) group.push(n);
@@ -74,7 +131,7 @@ export function layoutGraph(
       for (const m of neighbors.get(n.id) ?? []) {
         const r = row.get(m);
         if (r === undefined) continue;
-        sum += r / (colSize.get(colOf.get(m) ?? 2) ?? 1);
+        sum += r / (colSize.get(colOf.get(m) ?? 0) ?? 1);
         count++;
       }
       return { n, score: count ? sum / count : Number.MAX_SAFE_INTEGER };

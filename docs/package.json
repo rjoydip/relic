@@ -5,11 +5,9 @@
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
-    "preview": "vitepress preview",
-    "deploy": "wrangler deploy"
+    "preview": "vitepress preview"
   },
   "devDependencies": {
-    "vitepress": "^1.6.4",
-    "wrangler": "^4.151.3"
+    "vitepress": "^1.6.4"
   }
 }

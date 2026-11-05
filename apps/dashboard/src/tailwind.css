@@ -18,7 +18,7 @@
   --color-popover: var(--panel);
   --color-popover-foreground: var(--text);
   --color-primary: var(--accent);
-  --color-primary-foreground: #ffffff;
+  --color-primary-foreground: var(--accent-ink);
   --color-secondary: var(--panel-2);
   --color-secondary-foreground: var(--text);
   --color-muted: var(--panel-2);

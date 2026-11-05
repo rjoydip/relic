@@ -17,6 +17,8 @@ export interface GraphNodeDto {
   filePath: string | null;
   startLine: number | null;
   endLine: number | null;
+  /** analyzer payload — symbol nodes carry { kind: class|method|function|variable } */
+  metadata?: Record<string, unknown>;
 }
 
 export interface GraphEdgeDto {
@@ -26,6 +28,23 @@ export interface GraphEdgeDto {
   type: string;
   confidence: number;
   evidence: { source: string; file?: string; line?: number; note?: string };
+}
+
+/** Portable graph export — the header download and the index-screen upload. */
+export interface Snapshot {
+  format: "relic-snapshot";
+  version: 1;
+  repository: {
+    name: string;
+    rootPath: string;
+    lastRevision: string | null;
+    indexedAt: string | null;
+    durationMs: number | null;
+    fileCount: number;
+    diagnostics: Array<{ kind: string; message: string; file?: string }>;
+  };
+  nodes: GraphNodeDto[];
+  edges: GraphEdgeDto[];
 }
 
 export interface EvidenceStep {
@@ -43,8 +62,12 @@ export interface IndexStatusDto {
   diagnostics: Array<{ kind: string; message: string; file?: string }>;
 }
 
+// Static deployments (Cloudflare) have no API of their own; point the build at
+// a separately hosted Relic API with VITE_RELIC_API_URL (e.g. https://api.example.com).
+const API_ORIGIN = (import.meta.env.VITE_RELIC_API_URL ?? "").replace(/\/$/, "");
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, init);
+  const res = await fetch(`${API_ORIGIN}/api${path}`, init);
   const body = (await res.json().catch(() => ({}))) as T & { error?: string; message?: string };
   if (!res.ok)
     throw new Error(
@@ -84,6 +107,20 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ source }),
     }),
+
+  deleteRepository: (id: string) =>
+    request<{ deleted: string }>(`/repositories/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  snapshot: (repo: string) =>
+    request<Snapshot>(`/repositories/${encodeURIComponent(repo)}/snapshot`),
+  importSnapshot: (snapshot: Snapshot) =>
+    request<{ repositoryId: string; nodeCount: number; edgeCount: number }>("/snapshot", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(snapshot),
+    }),
+
   reindex: (id: string, root: string) =>
     request<{ analyzedFiles: number; nodeCount: number; edgeCount: number }>(
       `/repositories/${encodeURIComponent(id)}/index`,

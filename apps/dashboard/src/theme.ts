@@ -13,55 +13,56 @@ export const TREE_ICONS: FileTreeIconConfig = {
 // dashboard and graph stay one palette per mode
 const PALETTES: Record<ThemeMode, { bg: string; fg: string; colors: Record<string, string> }> = {
   dark: {
-    bg: "#0d1117",
-    fg: "#e8eef7",
+    bg: "#181420",
+    fg: "#f5f2f7",
     colors: {
-      "sideBar.background": "#0d1117",
-      "sideBar.foreground": "#e8eef7",
-      "sideBar.border": "#1d2530",
-      "sideBarSectionHeader.foreground": "#93a1b5",
-      "list.activeSelectionBackground": "#182031",
-      "list.activeSelectionForeground": "#e8eef7",
-      "list.focusBackground": "#131922",
-      "list.focusOutline": "#5e8bff",
-      "list.hoverBackground": "#131922",
-      "input.background": "#131922",
-      "input.foreground": "#e8eef7",
-      "input.border": "#273141",
-      focusBorder: "#5e8bff",
-      "scrollbarSlider.background": "#273141",
-      "gitDecoration.addedResourceForeground": "#3fb950",
+      "sideBar.background": "#181420",
+      "sideBar.foreground": "#f5f2f7",
+      "sideBar.border": "#2a2333",
+      "sideBarSectionHeader.foreground": "#b4a9bf",
+      "list.activeSelectionBackground": "#2a1f36",
+      "list.activeSelectionForeground": "#f5f2f7",
+      "list.focusBackground": "#221a2b",
+      "list.focusOutline": "#c73f92",
+      "list.hoverBackground": "#221a2b",
+      "input.background": "#221a2b",
+      "input.foreground": "#f5f2f7",
+      "input.border": "#3b2f47",
+      focusBorder: "#c73f92",
+      "scrollbarSlider.background": "#3b2f47",
+      "gitDecoration.addedResourceForeground": "#4ade80",
       "gitDecoration.modifiedResourceForeground": "#f0b429",
-      "gitDecoration.deletedResourceForeground": "#f47067",
+      "gitDecoration.deletedResourceForeground": "#f05252",
     },
   },
   light: {
-    bg: "#ffffff",
-    fg: "#1b2432",
+    bg: "#f6f2f9",
+    fg: "#1c1420",
     colors: {
-      "sideBar.background": "#ffffff",
-      "sideBar.foreground": "#1b2432",
-      "sideBar.border": "#d9dfe9",
-      "sideBarSectionHeader.foreground": "#55637a",
-      "list.activeSelectionBackground": "#eaf1ff",
-      "list.activeSelectionForeground": "#1b2432",
-      "list.focusBackground": "#eef1f7",
-      "list.focusOutline": "#5e8bff",
-      "list.hoverBackground": "#eef1f7",
-      "input.background": "#eef1f7",
-      "input.foreground": "#1b2432",
-      "input.border": "#c6cedd",
-      focusBorder: "#5e8bff",
-      "scrollbarSlider.background": "#c6cedd",
-      "gitDecoration.addedResourceForeground": "#1a8f42",
-      "gitDecoration.modifiedResourceForeground": "#b45309",
-      "gitDecoration.deletedResourceForeground": "#d64545",
+      "sideBar.background": "#f6f2f9",
+      "sideBar.foreground": "#1c1420",
+      "sideBar.border": "#e6ddeb",
+      "sideBarSectionHeader.foreground": "#5c4f66",
+      "list.activeSelectionBackground": "#ece4f2",
+      "list.activeSelectionForeground": "#1c1420",
+      "list.focusBackground": "#ece4f2",
+      "list.focusOutline": "#a03370",
+      "list.hoverBackground": "#ece4f2",
+      "input.background": "#ffffff",
+      "input.foreground": "#1c1420",
+      "input.border": "#d4c7de",
+      focusBorder: "#a03370",
+      "scrollbarSlider.background": "#d4c7de",
+      "gitDecoration.addedResourceForeground": "#15803d",
+      "gitDecoration.modifiedResourceForeground": "#a16207",
+      "gitDecoration.deletedResourceForeground": "#dc2626",
     },
   },
 };
 
-export function treeThemeStyles(theme: ThemeMode, accent: string): CSSProperties {
+export function treeThemeStyles(theme: ThemeMode): CSSProperties {
   const palette = PALETTES[theme];
+  const accent = theme === "dark" ? "#c73f92" : "#a03370";
   const derived = themeToTreeStyles({
     type: theme,
     bg: palette.bg,
@@ -74,9 +75,9 @@ export function treeThemeStyles(theme: ThemeMode, accent: string): CSSProperties
   delete derived.minHeight;
   return {
     ...derived,
-    // documented override layer: selection and focus track the live accent
+    // documented override layer: selection and focus follow the brand magenta
     "--trees-accent-override": accent,
-    "--trees-theme-list-active-selection-bg": `color-mix(in oklab, ${accent} 24%, transparent)`,
+    "--trees-theme-list-active-selection-bg": `color-mix(in oklab, ${accent} 20%, transparent)`,
     "--trees-theme-focus-ring": accent,
   } as CSSProperties;
 }

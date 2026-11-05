@@ -75,3 +75,37 @@ test("indexSource posts the source body", async () => {
   expect(call.init?.method).toBe("POST");
   expect(JSON.parse(String(call.init?.body))).toEqual({ source: "C:/code" });
 });
+
+test("snapshot endpoints encode the repository and delete with DELETE", async () => {
+  mockFetch(() => Response.json({ format: "relic-snapshot", version: 1 }));
+  await api.snapshot("r 1");
+  expect(calls[0]?.url).toBe("/api/repositories/r%201/snapshot");
+
+  await api.deleteRepository("r/1");
+  expect(calls[1]?.url).toBe("/api/repositories/r%2F1");
+  expect(calls[1]?.init?.method).toBe("DELETE");
+});
+
+test("importSnapshot posts the snapshot body", async () => {
+  mockFetch(() => Response.json({ repositoryId: "r", nodeCount: 0, edgeCount: 0 }));
+  const snapshot = {
+    format: "relic-snapshot" as const,
+    version: 1 as const,
+    repository: {
+      name: "r",
+      rootPath: "/tmp/r",
+      lastRevision: null,
+      indexedAt: null,
+      durationMs: null,
+      fileCount: 0,
+      diagnostics: [],
+    },
+    nodes: [],
+    edges: [],
+  };
+  await api.importSnapshot(snapshot);
+  const call = calls[0]!;
+  expect(call.url).toBe("/api/snapshot");
+  expect(call.init?.method).toBe("POST");
+  expect(JSON.parse(String(call.init?.body))).toEqual(snapshot);
+});

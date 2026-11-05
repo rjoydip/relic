@@ -16,6 +16,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // the header docs link points at the deployed /docs/ path; in dev that
+      // is the VitePress server, so forward instead of 404ing
+      "/docs": {
+        target: "http://127.0.0.1:5174",
+      },
       "/api": {
         target: apiTarget,
         configure: (proxy) => {

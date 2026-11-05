@@ -1,6 +1,8 @@
 [test]
 # Fixture repo is analyzed, never executed as part of our suite.
 pathIgnorePatterns = ["tests/fixtures"]
+# Coverage gates product code; test helpers are defensive glue, not shipped code.
+coveragePathIgnorePatterns = ["tests/**"]
 # Bun enforces these PER FILE as fractions (0-1), not as aggregate percents.
 # Current worst files: ids.ts 0.90 funcs / extract.ts 0.92 lines; suite aggregate ~0.98/0.99.
 coverageThreshold = { functions = 0.85, lines = 0.85 }

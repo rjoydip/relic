@@ -198,6 +198,53 @@ describe("dashboard API", () => {
     expect(body.error).toBe("INVALID_INPUT");
     expect(body.message).toContain("Ambiguous symbol: User");
   });
+
+  it("exports, re-imports, and deletes a graph snapshot", async () => {
+    const snapshot = await json<{
+      format: string;
+      version: number;
+      nodes: Array<{ id: string }>;
+      edges: unknown[];
+    }>(await app.request(`/api/repositories/${repoId}/snapshot`));
+    expect(snapshot.format).toBe("relic-snapshot");
+    expect(snapshot.version).toBe(1);
+    expect(snapshot.nodes.length).toBeGreaterThan(0);
+    expect(snapshot.edges.length).toBeGreaterThan(0);
+
+    const imported = await json<{ repositoryId: string; nodeCount: number; edgeCount: number }>(
+      await app.request("/api/snapshot", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(snapshot),
+      }),
+    );
+    expect(imported.repositoryId).toBe(repoId);
+    expect(imported.nodeCount).toBe(snapshot.nodes.length);
+
+    const list = await json<{ repositories: Array<{ id: string }> }>(
+      await app.request("/api/repositories"),
+    );
+    expect(list.repositories.some((r) => r.id === imported.repositoryId)).toBe(true);
+
+    const bad = await app.request("/api/snapshot", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ format: "nope", version: 2 }),
+    });
+    expect(bad.status).toBe(400);
+
+    const del = await app.request(`/api/repositories/${repoId}`, { method: "DELETE" });
+    expect(del.status).toBe(200);
+    const after = await json<{ repositories: Array<{ id: string }> }>(
+      await app.request("/api/repositories"),
+    );
+    expect(after.repositories.some((r) => r.id === repoId)).toBe(false);
+
+    expect((await app.request(`/api/repositories/${repoId}/snapshot`)).status).toBe(404);
+    expect((await app.request(`/api/repositories/${repoId}`, { method: "DELETE" })).status).toBe(
+      404,
+    );
+  });
 });
 
 describe("dashboard API — allowed roots", () => {
