@@ -10,6 +10,11 @@
         "@effect/platform-node": "^4.1.2",
         "@modelcontextprotocol/sdk": "^1.20.0",
         "@playwright/test": "^1.64.1",
+        "@relic/analyzer-core": "workspace:*",
+        "@relic/analyzer-go": "workspace:*",
+        "@relic/analyzer-java": "workspace:*",
+        "@relic/analyzer-python": "workspace:*",
+        "@relic/analyzer-rust": "workspace:*",
         "@relic/analyzer-typescript": "workspace:*",
         "@relic/database": "workspace:*",
         "@relic/graph-core": "workspace:*",
@@ -70,7 +75,7 @@
         "tailwindcss": "^4.3.3",
       },
     },
-    "apps/mcp-server": {
+    "apps/mcp": {
       "name": "@relic/mcp-server",
       "version": "0.1.0",
       "dependencies": {
@@ -88,13 +93,58 @@
         "vitepress": "^1.6.4",
       },
     },
-    "packages/analyzer-typescript": {
-      "name": "@relic/analyzer-typescript",
+    "packages/analyzer/core": {
+      "name": "@relic/analyzer-core",
       "version": "0.1.0",
       "dependencies": {
         "@relic/graph-core": "workspace:*",
         "typescript": "^5.9.2",
       },
+    },
+    "packages/analyzer/go": {
+      "name": "@relic/analyzer-go",
+      "version": "0.1.0",
+      "dependencies": {
+        "@relic/analyzer-core": "workspace:*",
+        "@relic/graph-core": "workspace:*",
+      },
+    },
+    "packages/analyzer/java": {
+      "name": "@relic/analyzer-java",
+      "version": "0.1.0",
+      "dependencies": {
+        "@relic/analyzer-core": "workspace:*",
+        "@relic/graph-core": "workspace:*",
+      },
+    },
+    "packages/analyzer/python": {
+      "name": "@relic/analyzer-python",
+      "version": "0.1.0",
+      "dependencies": {
+        "@relic/analyzer-core": "workspace:*",
+        "@relic/graph-core": "workspace:*",
+      },
+    },
+    "packages/analyzer/rust": {
+      "name": "@relic/analyzer-rust",
+      "version": "0.1.0",
+      "dependencies": {
+        "@relic/analyzer-core": "workspace:*",
+        "@relic/graph-core": "workspace:*",
+      },
+    },
+    "packages/analyzer/typescript": {
+      "name": "@relic/analyzer-typescript",
+      "version": "0.1.0",
+      "dependencies": {
+        "@relic/analyzer-core": "workspace:*",
+        "@relic/graph-core": "workspace:*",
+        "typescript": "^5.9.2",
+      },
+    },
+    "packages/core": {
+      "name": "@relic/graph-core",
+      "version": "0.1.0",
     },
     "packages/database": {
       "name": "@relic/database",
@@ -103,14 +153,15 @@
         "@relic/graph-core": "workspace:*",
       },
     },
-    "packages/graph-core": {
-      "name": "@relic/graph-core",
-      "version": "0.1.0",
-    },
     "packages/indexer": {
       "name": "@relic/indexer",
       "version": "0.1.0",
       "dependencies": {
+        "@relic/analyzer-core": "workspace:*",
+        "@relic/analyzer-go": "workspace:*",
+        "@relic/analyzer-java": "workspace:*",
+        "@relic/analyzer-python": "workspace:*",
+        "@relic/analyzer-rust": "workspace:*",
         "@relic/analyzer-typescript": "workspace:*",
         "@relic/database": "workspace:*",
         "@relic/graph-core": "workspace:*",
@@ -484,7 +535,17 @@
 
     "@redis/time-series": ["@redis/time-series@6.3.1", "", { "peerDependencies": { "@redis/client": "^6.3.1" } }, "sha512-MNDgrm+i63M/1a+XA+HcDsScwt4uBh/fGGJ84swTQZTFK5K5wMmxdlTRa4ZgmNJzjxMaszW/ipPScMUGV3aAMg=="],
 
-    "@relic/analyzer-typescript": ["@relic/analyzer-typescript@workspace:packages/analyzer-typescript"],
+    "@relic/analyzer-core": ["@relic/analyzer-core@workspace:packages/analyzer/core"],
+
+    "@relic/analyzer-go": ["@relic/analyzer-go@workspace:packages/analyzer/go"],
+
+    "@relic/analyzer-java": ["@relic/analyzer-java@workspace:packages/analyzer/java"],
+
+    "@relic/analyzer-python": ["@relic/analyzer-python@workspace:packages/analyzer/python"],
+
+    "@relic/analyzer-rust": ["@relic/analyzer-rust@workspace:packages/analyzer/rust"],
+
+    "@relic/analyzer-typescript": ["@relic/analyzer-typescript@workspace:packages/analyzer/typescript"],
 
     "@relic/dashboard": ["@relic/dashboard@workspace:apps/dashboard"],
 
@@ -492,11 +553,11 @@
 
     "@relic/docs": ["@relic/docs@workspace:docs"],
 
-    "@relic/graph-core": ["@relic/graph-core@workspace:packages/graph-core"],
+    "@relic/graph-core": ["@relic/graph-core@workspace:packages/core"],
 
     "@relic/indexer": ["@relic/indexer@workspace:packages/indexer"],
 
-    "@relic/mcp-server": ["@relic/mcp-server@workspace:apps/mcp-server"],
+    "@relic/mcp-server": ["@relic/mcp-server@workspace:apps/mcp"],
 
     "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.13", "", { "os": "android", "cpu": "arm" }, "sha512-Vu/NICrgdRvUOeaJZIyB2FP63s6fO/4ud5l8dXmxDx9yDyn+mN0y+gsvsVviSli+T361Aqo0h46EuMoobrwawA=="],
 

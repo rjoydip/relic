@@ -4,7 +4,7 @@
 
 # Relic
 
-Static dependency-graph engine for TypeScript repositories, exposed three ways: an MCP server (for coding agents), a Hono HTTP API, and a React Flow dashboard.
+Static dependency-graph engine for TypeScript/JavaScript, Python, Rust, Java and Go repositories, exposed three ways: an MCP server (for coding agents), a Hono HTTP API, and a React Flow dashboard. It also ingests docker-compose, Dockerfile and Kubernetes manifests and runtime coverage evidence.
 
 The core promise: when you ask "what breaks if I change `UserService.updateUser`?", you get an evidence-backed answer — every edge carries a source file, line, confidence (`static` 1.0 vs `inferred` 0.6), and a note explaining how it was resolved. Unresolved calls become diagnostics; they never become invented edges.
 
@@ -12,16 +12,24 @@ The core promise: when you ask "what breaks if I change `UserService.updateUser`
 
 ```sh
 packages/
-  graph-core/             domain types, GraphRepository interface, GraphService (impact analysis)
+  core/                   domain types, GraphRepository interface, GraphService (impact analysis)
   database/               node:sqlite storage behind GraphRepository (recursive-CTE traversal)
-  analyzer-typescript/    TypeScript Compiler API analyzer (2 passes: extract, resolve)
-  indexer/                incremental indexing (hash change detection, importer re-expansion)
+  analyzer/
+    core/                 shared analyzer contract, discovery, resolver, manifests
+    typescript/           TypeScript/JavaScript analyzer
+    python/               Python analyzer
+    rust/                 Rust analyzer
+    java/                 Java analyzer
+    go/                   Go analyzer
+  indexer/                incremental indexing (hash change detection, importer re-expansion), runtime evidence
 apps/
-  mcp-server/             MCP stdio server: 13 tools, 3 resources, 2 prompts
+  mcp/                    MCP stdio server: 15 tools, 3 resources, 2 prompts
   api/                    Hono API + the publishable package: `relic` CLI and `relic-mcp` bins
   dashboard/              React + React Flow graph explorer
 tests/
-  fixtures/starter-hono/  deterministic fixture (critical scenario: UserController → UserService.updateUser → UserRepository.update)
+  fixtures/analyzer/typescript/  deterministic fixture (critical scenario: UserController → UserService.updateUser → UserRepository.update)
+  fixtures/analyzer/{python,go,java,rust}/  per-language analyzer fixtures
+  fixtures/{cross-repo,infra}/   workspace and deployment scenarios
   unit|integration|security/
 ```
 
@@ -49,7 +57,7 @@ npm install -g relic-graph   # provides `relic` and `relic-mcp`
 
 On startup the server auto-indexes `RELIC_ROOT` (or `RELIC_REPOSITORY`, or the launch directory), so tools answer immediately; `index_repository` stays available for other projects.
 
-Tools: `index_repository`, `search_symbols`, `get_symbol_details`, `find_dependents`, `find_dependencies`, `find_cycles`, `find_dead_code`, `get_owners`, `analyze_impact`, `get_dependency_path`, `find_related_tests`, `analyze_git_diff`, `get_graph_summary`.
+Tools: `index_repository`, `search_symbols`, `search_semantic`, `get_symbol_details`, `find_dependents`, `find_dependencies`, `find_cycles`, `find_dead_code`, `get_owners`, `analyze_impact`, `get_dependency_path`, `find_related_tests`, `analyze_git_diff`, `ingest_runtime`, `get_graph_summary`.
 
 Example client config (Claude Code / Cursor / Cline / Windsurf all use the same shape):
 
@@ -114,6 +122,7 @@ relic check                                      # boundary rules, exit 1 on vio
 relic init                                       # .mcp.json + skills/relic/SKILL.md
 relic pr --base origin/main --head HEAD          # Markdown blast radius for a PR
 relic diff before.json after.json --check        # snapshot drift
+relic runtime coverage.lcov                      # lcov | OTLP JSON runtime evidence
 ```
 
 Boundary rules live in `.relicrc.json` (or `relic.config.json`); each rule

@@ -287,7 +287,7 @@ main {
   display: grid;
   /* One wide side panel: Files when nothing is selected, Details when it is.
      The graph always owns the first column. */
-  grid-template-columns: minmax(0, 1fr) clamp(420px, 34vw, 560px);
+  grid-template-columns: minmax(0, 1fr) clamp(520px, 44vw, 780px);
   position: relative;
   flex: 1;
   min-height: 0;
@@ -308,8 +308,6 @@ aside.explorer {
   overflow: hidden;
   padding: 12px;
   gap: 6px;
-  /* tinted panel so the explorer reads as part of the brand palette */
-  background: var(--panel-2);
   border-right: none;
   border-left: 1px solid var(--border);
 }
@@ -1542,6 +1540,10 @@ header .index-form {
   min-height: 0;
   overflow: hidden;
   background: var(--panel);
+}
+/* keep the code surface on the same panel colour as the explorer/inspector */
+.code-modal .cn-code-block {
+  background: transparent;
 }
 /* the focused range is the reason the file opened — make it obvious */
 .code-modal .cn-code-block-line-variant-highlighted {

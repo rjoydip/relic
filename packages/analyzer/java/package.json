@@ -1,0 +1,13 @@
+{
+  "name": "@relic/analyzer-java",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@relic/analyzer-core": "workspace:*",
+    "@relic/graph-core": "workspace:*"
+  }
+}

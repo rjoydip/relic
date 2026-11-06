@@ -199,12 +199,26 @@ export class SqliteGraphRepository implements GraphRepository {
       for (const filePath of input.deletedFiles ?? [])
         this.deleteFileGraph(input.meta.id, filePath);
 
+      // Runtime evidence is an overlay: re-indexing a file must not discard it.
+      const preservedRuntime: GraphEdge[] = [];
       for (const file of input.files) {
         const existingIds = (
           this.db
             .prepare("SELECT id FROM nodes WHERE repository_id = ? AND file_path = ?")
             .all(input.meta.id, file.filePath) as Array<{ id: string }>
         ).map((r) => r.id);
+        if (existingIds.length > 0) {
+          const placeholders = existingIds.map(() => "?").join(",");
+          const rows = this.db
+            .prepare(
+              `SELECT * FROM edges WHERE repository_id = ? AND source_id IN (${placeholders})`,
+            )
+            .all(input.meta.id, ...existingIds) as unknown as EdgeRow[];
+          for (const row of rows) {
+            const edge = toEdge(row);
+            if (edge.evidence.source === "runtime") preservedRuntime.push(edge);
+          }
+        }
         const newIds = new Set(file.nodes.map((n) => n.id));
         // File owns its outgoing edges; regenerate them from the new analysis.
         this.db
@@ -219,12 +233,10 @@ export class SqliteGraphRepository implements GraphRepository {
         for (const node of file.nodes) this.upsertNode(node);
       }
 
+      // Cross-repository edges are valid: nodes from every indexed repository
+      // are candidates, while ownership/pruning stays scoped to input.meta.id.
       const known = new Set(
-        (
-          this.db
-            .prepare("SELECT id FROM nodes WHERE repository_id = ?")
-            .all(input.meta.id) as Array<{ id: string }>
-        ).map((r) => r.id),
+        (this.db.prepare("SELECT id FROM nodes").all() as Array<{ id: string }>).map((r) => r.id),
       );
       for (const file of input.files) {
         for (const edge of file.edges) {
@@ -235,12 +247,15 @@ export class SqliteGraphRepository implements GraphRepository {
           this.upsertEdge(edge);
         }
       }
+      for (const edge of preservedRuntime) {
+        if (known.has(edge.sourceId) && known.has(edge.targetId)) this.upsertEdge(edge);
+      }
 
-      // Prune database tables whose last referencing edge disappeared.
+      // Prune repo-wide nodes whose last referencing edge disappeared.
       this.db
         .prepare(
           `DELETE FROM nodes
-           WHERE repository_id = ? AND type = 'database_table'
+           WHERE repository_id = ? AND type IN ('database_table', 'queue')
              AND id NOT IN (SELECT source_id FROM edges WHERE repository_id = ?)
              AND id NOT IN (SELECT target_id FROM edges WHERE repository_id = ?)`,
         )

@@ -1,11 +1,38 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/graph-core" },
-    { "path": "packages/database" },
-    { "path": "packages/analyzer-typescript" },
-    { "path": "packages/indexer" },
-    { "path": "apps/mcp-server" },
-    { "path": "apps/api" }
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/analyzer/core"
+    },
+    {
+      "path": "packages/analyzer/typescript"
+    },
+    {
+      "path": "packages/analyzer/python"
+    },
+    {
+      "path": "packages/analyzer/rust"
+    },
+    {
+      "path": "packages/analyzer/java"
+    },
+    {
+      "path": "packages/analyzer/go"
+    },
+    {
+      "path": "packages/database"
+    },
+    {
+      "path": "packages/indexer"
+    },
+    {
+      "path": "apps/mcp"
+    },
+    {
+      "path": "apps/api"
+    }
   ]
 }

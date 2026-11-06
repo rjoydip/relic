@@ -1,21 +1,41 @@
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Diagnostic, GraphRepository, RepositoryMeta } from "@relic/graph-core";
 import { GraphService } from "@relic/graph-core";
 import { DatabaseClient, SqliteGraphRepository, type ReplaceGraphInput } from "@relic/database";
 import {
-  extractFile,
+  extractManifest,
   fileId,
   loadCodeowners,
   makeRepositoryContext,
   ownersFor,
   readFileHash,
   relate,
+  walkManifestFiles,
   walkRepository,
   type ExtractedFile,
+  type ManifestGraph,
   type RefInfo,
   type RefLookup,
 } from "@relic/analyzer-typescript";
+import { extractFile } from "@relic/analyzer-typescript";
+import { extractPythonFile } from "@relic/analyzer-python";
+import { extractRustFile } from "@relic/analyzer-rust";
+import { extractJavaFile } from "@relic/analyzer-java";
+import { extractGoFile } from "@relic/analyzer-go";
+
+/** Language dispatch: every analyzer emits the shared ExtractedFile contract. */
+function extractSourceFile(
+  repo: Parameters<typeof extractFile>[0],
+  filePath: string,
+): ExtractedFile {
+  if (filePath.endsWith(".py")) return extractPythonFile(repo, filePath);
+  if (filePath.endsWith(".rs")) return extractRustFile(repo, filePath);
+  if (filePath.endsWith(".java")) return extractJavaFile(repo, filePath);
+  if (filePath.endsWith(".go")) return extractGoFile(repo, filePath);
+  return extractFile(repo, filePath);
+}
 
 export interface IndexResult {
   repositoryId: string;
@@ -37,10 +57,14 @@ export class Indexer {
   index(root: string, options: { revision?: string | null } = {}): IndexResult {
     const started = Date.now();
     const ctx = makeRepositoryContext(root);
+    const external = this.externalPackages(ctx.id);
     // ponytail: a CODEOWNERS edit only reaches files that are re-analyzed; run
     // a full re-index when ownership changes matter.
     const codeowners = loadCodeowners(ctx.rootPath);
-    const current = walkRepository(ctx.rootPath);
+    const codeFiles = walkRepository(ctx.rootPath);
+    const manifestFiles = walkManifestFiles(ctx.rootPath);
+    const manifestSet = new Set(manifestFiles);
+    const current = [...new Set([...codeFiles, ...manifestFiles])].sort();
     const stored = this.repo.listFiles(ctx.id);
     const storedHashes = new Map(stored.map((f) => [f.filePath, f.contentHash]));
 
@@ -67,7 +91,12 @@ export class Indexer {
 
     // Pass A: extract declarations and pending relationships.
     const extracted = new Map<string, ExtractedFile>();
-    for (const path of toAnalyze) extracted.set(path, extractFile(ctx, path));
+    const manifests = new Map<string, ManifestGraph>();
+    for (const path of toAnalyze) {
+      if (manifestSet.has(path)) manifests.set(path, extractManifest(ctx, path));
+      else extracted.set(path, extractSourceFile(ctx, path));
+    }
+    for (const file of extracted.values()) resolveExternalImports(file.imports, external);
 
     // Shared ref lookup: fresh results first, database for everything else.
     const freshRefs = new Map<string, RefInfo[]>();
@@ -97,6 +126,13 @@ export class Indexer {
     // Pass B: resolve relationships for analyzed files only.
     const files: ReplaceGraphInput["files"] = [];
     const diagnostics: Diagnostic[] = [];
+    for (const manifest of manifests.values()) {
+      files.push({
+        filePath: manifest.filePath,
+        nodes: manifest.nodes,
+        edges: manifest.edges,
+      });
+    }
     for (const [path, file] of extracted) {
       // CODEOWNERS applies to every node declared in the file; blame is
       // resolved on demand by the owners query rather than at index time.
@@ -148,6 +184,124 @@ export class Indexer {
       diagnostics: meta.diagnostics,
     };
   }
+
+  /** Package name -> repository files for every other indexed repository. */
+  private externalPackages(currentId: string): Map<string, ExternalPackage> {
+    const out = new Map<string, ExternalPackage>();
+    for (const meta of this.repo.listRepositories()) {
+      if (meta.id === currentId) continue;
+      const files = this.repo.listFiles(meta.id).map((file) => file.filePath);
+      for (const pkg of packageNames(meta.rootPath)) {
+        out.set(pkg.name, { repositoryId: meta.id, dir: pkg.dir, files });
+      }
+    }
+    return out;
+  }
+}
+
+interface ExternalPackage {
+  repositoryId: string;
+  /** Repo-relative workspace directory; "" for the repository root. */
+  dir: string;
+  files: string[];
+}
+
+function resolveExternalImports(
+  imports: Array<{
+    targetFile: string | null;
+    specifier?: string;
+    targetRepositoryId?: string;
+  }>,
+  external: Map<string, ExternalPackage>,
+): void {
+  for (const binding of imports) {
+    if (binding.targetFile || !binding.specifier || binding.specifier.startsWith(".")) continue;
+    const match = [...external.entries()]
+      .filter(([name]) => binding.specifier === name || binding.specifier!.startsWith(`${name}/`))
+      .sort((a, b) => b[0].length - a[0].length)[0];
+    if (!match) continue;
+    const [name, pkg] = match;
+    const subpath = binding.specifier.slice(name.length + 1);
+    const target = entryFile(pkg, subpath);
+    if (!target) continue;
+    binding.targetFile = target;
+    binding.targetRepositoryId = pkg.repositoryId;
+  }
+}
+
+/** Root package plus simple one-level workspace packages (`packages/*`, `apps/*`). */
+function packageNames(rootPath: string): Array<{ name: string; dir: string }> {
+  const out: Array<{ name: string; dir: string }> = [];
+  const root = readPackage(rootPath);
+  if (root.name) out.push({ name: root.name, dir: "" });
+  for (const pattern of root.workspaces) {
+    const base = pattern.replace(/^\.\//, "").replace(/\/+$/, "");
+    if (!base.endsWith("/*")) continue;
+    const parent = base.slice(0, -2);
+    let entries;
+    try {
+      entries = readdirSync(join(rootPath, parent), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+      const dir = `${parent}/${entry.name}`;
+      const child = readPackage(join(rootPath, dir));
+      if (child.name) out.push({ name: child.name, dir });
+    }
+  }
+  return out;
+}
+
+function readPackage(dir: string): { name: string | null; workspaces: string[] } {
+  const manifest = join(dir, "package.json");
+  if (!existsSync(manifest)) return { name: null, workspaces: [] };
+  try {
+    const pkg = JSON.parse(readFileSync(manifest, "utf8")) as {
+      name?: unknown;
+      workspaces?: unknown;
+    };
+    const raw: unknown = pkg.workspaces;
+    const workspaces: unknown[] = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === "object"
+        ? (((raw as { packages?: unknown }).packages as unknown[]) ?? [])
+        : [];
+    return {
+      name: typeof pkg.name === "string" ? pkg.name : null,
+      workspaces: workspaces.filter((item): item is string => typeof item === "string"),
+    };
+  } catch {
+    return { name: null, workspaces: [] };
+  }
+}
+
+function entryFile(pkg: ExternalPackage, subpath: string): string | null {
+  const bases = subpath
+    ? [subpath, `src/${subpath}`]
+    : ["src/index", "index", "src/main", "main", "src/index.py", "index.py"];
+  const candidates = bases.flatMap((base) =>
+    /\.\w+$/.test(base)
+      ? [base]
+      : [
+          base,
+          `${base}.ts`,
+          `${base}.tsx`,
+          `${base}.js`,
+          `${base}.jsx`,
+          `${base}.py`,
+          `${base}/index.ts`,
+          `${base}/index.tsx`,
+          `${base}/index.js`,
+          `${base}/__init__.py`,
+        ],
+  );
+  for (const candidate of candidates) {
+    const path = pkg.dir ? `${pkg.dir}/${candidate}` : candidate;
+    if (pkg.files.includes(path)) return path;
+  }
+  return null;
 }
 
 function gitRevision(rootPath: string): string | null {
@@ -193,3 +347,4 @@ export function openGraph(dbPath: string): OpenGraph {
 export { makeRepositoryContext, repositoryIdFor } from "@relic/analyzer-typescript";
 export type { GraphRepository, NodeFilter } from "@relic/graph-core";
 export * from "./changes";
+export * from "./runtime";

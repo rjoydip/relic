@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import type { GraphNode, ImpactResult } from "@relic/graph-core";
+import { ingestRuntime, readRuntimeFile } from "@relic/indexer";
 import { buildApp, type RelicApp } from "./app";
 import { evaluateBoundaries, loadBoundaryConfig } from "./check";
 import { diffSnapshots, type SnapshotLike } from "./diff";
@@ -26,10 +27,11 @@ import { startWatcher } from "./watch";
  *   relic pr [--path <repo>] [--base <rev>] [--head <rev>] [--json]
  *   relic init [path] [--force]
  *   relic diff a.json b.json [--check]
+ *   relic runtime <coverage.lcov|otel.json> [--path <repo>] [--runtime-format lcov|otel]
  */
-type Mode = "serve" | "index" | "diff" | "impact" | "export" | "check" | "init" | "pr";
+type Mode = "serve" | "index" | "diff" | "impact" | "export" | "check" | "init" | "pr" | "runtime";
 
-const MODES: Mode[] = ["index", "diff", "impact", "export", "check", "init", "pr"];
+const MODES: Mode[] = ["index", "diff", "impact", "export", "check", "init", "pr", "runtime"];
 
 interface CliOptions {
   mode: Mode;
@@ -50,6 +52,8 @@ interface CliOptions {
   base: string | null;
   head: string | null;
   force: boolean;
+  runtimeFile: string | null;
+  runtimeFormat: "lcov" | "otel" | null;
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -72,6 +76,8 @@ function parseArgs(argv: string[]): CliOptions {
     base: null,
     head: null,
     force: false,
+    runtimeFile: null,
+    runtimeFormat: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -82,7 +88,10 @@ function parseArgs(argv: string[]): CliOptions {
     else if (arg === "--path") opts.root = argv[++i] ?? opts.root;
     else if (arg === "--config") opts.config = argv[++i] ?? null;
     else if (arg === "--format") opts.format = (argv[++i] as ExportFormat) ?? "mermaid";
-    else if (arg === "--depth") {
+    else if (arg === "--runtime-format") {
+      const value = argv[++i];
+      opts.runtimeFormat = value === "otel" ? "otel" : "lcov";
+    } else if (arg === "--depth") {
       const value = Number(argv[++i]);
       opts.depth = Number.isFinite(value) ? value : 5;
     } else if (arg === "--base") opts.base = argv[++i] ?? null;
@@ -98,6 +107,7 @@ function parseArgs(argv: string[]): CliOptions {
     else if (!arg.startsWith("-")) {
       if (opts.mode === "diff") opts.diffFiles.push(arg);
       else if (opts.mode === "impact" && !opts.symbol) opts.symbol = arg;
+      else if (opts.mode === "runtime" && !opts.runtimeFile) opts.runtimeFile = arg;
       else opts.root = arg;
     }
   }
@@ -314,6 +324,34 @@ if (mode === "diff") {
     );
   } catch (err) {
     reportError("pr failed", err);
+  } finally {
+    app.graph.close();
+  }
+} else if (mode === "runtime") {
+  const app = buildApp({ dbPath });
+  try {
+    if (!opts.runtimeFile)
+      throw new Error("usage: relic runtime <coverage.lcov|otel.json> [--path <repo>]");
+    const runtime = readRuntimeFile(opts.runtimeFile);
+    const indexed = app.graph.indexer.index(root);
+    const report = ingestRuntime(
+      app.graph.repository,
+      indexed.repositoryId,
+      opts.runtimeFormat ?? runtime.format,
+      runtime.content,
+      root,
+    );
+    if (opts.json) {
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    } else {
+      process.stdout.write(
+        `runtime evidence: ${report.upgraded} edge(s) upgraded, ` +
+          `${report.conflicts} conflict(s), ${report.unmatched} unmatched ` +
+          `from ${report.observations} observation(s)\n`,
+      );
+    }
+  } catch (err) {
+    reportError("runtime failed", err);
   } finally {
     app.graph.close();
   }

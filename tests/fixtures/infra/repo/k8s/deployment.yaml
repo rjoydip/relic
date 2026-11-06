@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: relic-api
+spec:
+  template:
+    spec:
+      serviceAccountName: relic-api
+      containers:
+        - name: api
+          image: relic/api:latest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: relic-api
+spec:
+  selector:
+    app: relic-api

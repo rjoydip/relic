@@ -500,7 +500,7 @@ export function App() {
   const headerActions = (
     <span className="header-actions">
       <Hint label="Documentation">
-        <a className="docs-link" href="/docs/">
+        <a className="docs-link" href="/docs/" target="_blank" rel="noreferrer">
           <BookOpenIcon />
           <span>Docs</span>
         </a>

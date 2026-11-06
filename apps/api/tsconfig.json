@@ -3,9 +3,9 @@
   "compilerOptions": { "rootDir": "src", "outDir": "dist" },
   "include": ["src"],
   "references": [
-    { "path": "../../packages/graph-core" },
+    { "path": "../../packages/core" },
     { "path": "../../packages/indexer" },
     { "path": "../../packages/database" },
-    { "path": "../../packages/analyzer-typescript" }
+    { "path": "../../packages/analyzer/typescript" }
   ]
 }

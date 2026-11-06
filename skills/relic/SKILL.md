@@ -28,6 +28,11 @@ Facts over guesses. Prefer graph answers to grep/read; never invent relationship
 - "is there a dependency cycle" -> `find_cycles`
 - "who owns this file/symbol" -> `get_owners`
 - "what looks unused" -> `find_dead_code` (heuristic; opt-in, not a gate)
+- "where is X handled" / fuzzy natural-language lookup -> `search_semantic(query)`
+  (local lexical ranking; falls back to keyword search)
+- Runtime coverage was produced -> `ingest_runtime(format, content)` upgrades
+  `CALLS`/`TESTS` to confidence 0.9; `runtime-conflict` diagnostics mean the
+  static edge disagreed and was kept.
 - "review this change" -> `analyze_git_diff(base, head)`, then `analyze_impact`
   on each changed target
 - Cheap context without a tool call -> resources

@@ -8,7 +8,7 @@ import {
   coerceNodeType,
   coerceRepositoryId,
   sourceExcerpt,
-} from "../../../apps/mcp-server/src/helpers";
+} from "../../../apps/mcp/src/helpers";
 
 const node = (overrides: Partial<GraphNode>): GraphNode => ({
   id: "n1",

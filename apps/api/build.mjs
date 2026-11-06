@@ -13,7 +13,7 @@ if (!existsSync("../dashboard/dist")) {
 rmSync("dist", { recursive: true, force: true });
 
 await build({
-  entryPoints: { cli: "src/cli.ts", index: "../mcp-server/src/index.ts" },
+  entryPoints: { cli: "src/cli.ts", index: "../mcp/src/index.ts" },
   bundle: true,
   platform: "node",
   format: "esm",

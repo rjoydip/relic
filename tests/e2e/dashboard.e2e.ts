@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { resolve } from "node:path";
 
-const FIXTURE = resolve("tests/fixtures/starter-hono");
+const FIXTURE = resolve("tests/fixtures/analyzer/typescript/starter-hono");
 const GRAPH_NODES = ".react-flow__node";
 
 // Serial: the first test indexes the fixture the rest of the suite exercises

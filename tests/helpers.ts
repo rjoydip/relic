@@ -10,7 +10,9 @@ export async function json<T>(res: Response): Promise<T> {
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const PROJECT_ROOT = join(here, "..");
-export const FIXTURE_ROOT = join(here, "fixtures", "starter-hono");
+export const FIXTURE_ROOT = join(here, "fixtures", "analyzer", "typescript", "starter-hono");
+/** One directory per analyzer plus shared cross-repo/infra fixtures. */
+export const ANALYZER_FIXTURES = join(here, "fixtures", "analyzer");
 
 // ponytail: bun's node:sqlite releases file handles on a later event-loop
 // turn, and Windows blocks rm until then — occasionally longer than any sane

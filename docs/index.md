@@ -1,8 +1,8 @@
 # Relic
 
-Static dependency-graph engine for TypeScript repositories. Relic parses your source with the TypeScript
-compiler API, stores the result in a local SQLite database, and exposes it three ways: an MCP server for
-coding agents, a CLI + HTTP API, and a React Flow dashboard.
+Static dependency-graph engine for TypeScript/JavaScript, Python, Rust, Java and Go repositories. Relic parses
+your source, reads service/deployment manifests, stores the result in a local SQLite database, and exposes it
+three ways: an MCP server for coding agents, a CLI + HTTP API, and a React Flow dashboard.
 
 Everything runs locally. No account, no hosted service, no source code leaves the machine — the only network
 access is an optional `git clone` when you ask it to index a GitHub URL.
@@ -13,16 +13,19 @@ Ask "what breaks if I change `UserService.updateUser`?" and get an evidence-back
 source file, line, confidence (`static` 1.0 vs `inferred` 0.6), and a note explaining how it was resolved.
 Calls that cannot be resolved become diagnostics; they never become invented edges.
 
-- **MCP server** — 13 tools, 3 resources and 2 prompts over stdio, for Claude Code, Cursor, Cline, Windsurf,
+- **MCP server** — 15 tools, 3 resources and 2 prompts over stdio, for Claude Code, Cursor, Cline, Windsurf,
   or any MCP client.
 - **CLI** — `relic` indexes a project, serves the API + dashboard, and opens a browser. `relic index` is the
   headless variant for scripts and CI; `relic diff a.json b.json --check` fails on snapshot drift.
 - **Dashboard** — React + React Flow explorer with node search, neighbourhood expansion, code peek,
   impact analysis (risk score, coupling, owners) and cycle highlighting.
-- **Library** — `graph-core` (domain + traversal + impact), `database` (SQLite repository), `analyzer-typescript`
-  (2-pass analyzer), `indexer` (incremental orchestration).
+- **Library** — `graph-core` (domain + traversal + impact), `database` (SQLite repository), `analyzer-core`
+  (shared contract + resolver), per-language analyzers (`analyzer-typescript`, `analyzer-python`,
+  `analyzer-rust`, `analyzer-java`, `analyzer-go`), `indexer` (incremental orchestration, manifests,
+  runtime evidence).
 
-Relic is TypeScript-only today. The analyzer never executes indexed code — it only reads it.
+Relic supports TypeScript/JavaScript, Python, Rust, Java and Go today. The analyzer never executes indexed
+code — it only reads it.
 
 ## Requirements
 
@@ -52,7 +55,7 @@ node apps/api/dist/cli.js            # serve the project in the current director
 node apps/api/dist/index.js          # MCP stdio server
 
 bun run apps/api/src/cli.ts          # same, no build needed (dashboard needs a Vite build)
-bun run apps/mcp-server/src/index.ts
+bun run apps/mcp/src/index.ts
 ```
 
 ## MCP server
@@ -72,7 +75,7 @@ protocol messages; all logs go to stderr.
 }
 ```
 
-Point `args` at `/absolute/path/to/relic/apps/mcp-server/src/index.ts` with `"command": "bun"` if you have not
+Point `args` at `/absolute/path/to/relic/apps/mcp/src/index.ts` with `"command": "bun"` if you have not
 built the bundle.
 
 ### Environment
@@ -99,6 +102,8 @@ built the bundle.
 | `get_owners`          | `nodeId?` or `symbol?`, `repository?`                                                       | CODEOWNERS owners plus a git-blame author summary                          |
 | `analyze_git_diff`    | `base?` (default `HEAD`), `head?` (default working tree), `maxDepth?`                       | Changed files, changed targets, transitive impact                          |
 | `get_dependency_path` | `from`, `to`, `repository?`                                                                 | Shortest known relationship path                                           |
+| `search_semantic`     | `query`, `repository?`, `limit?` (1–100)                                                    | Ranked nodes with score + evidence, keyword fallback                       |
+| `ingest_runtime`      | `format` (`lcov` or `otel`), `content`, `repository?`                                       | Observations, upgraded/conflict/unmatched counts, diagnostics              |
 | `get_graph_summary`   | `repository?`                                                                               | Repository meta, counts, diagnostics, coupling report                      |
 
 Symbols resolve by exact name or qualified name; an ambiguous name fails with the first five matches and asks
@@ -126,6 +131,7 @@ relic check                    # architecture boundary rules, exit 1 on violatio
 relic init                     # merge .mcp.json + write skills/relic/SKILL.md
 relic pr --base origin/main    # Markdown impact report for a pull request
 relic diff a.json b.json --check
+relic runtime coverage.lcov    # upgrade CALLS/TESTS edges from lcov or OTLP JSON
 ```
 
 - Server binds `127.0.0.1` only; `--no-open` skips launching the browser.
@@ -133,6 +139,9 @@ relic diff a.json b.json --check
 - Database: `--db`, else `RELIC_DB`, else `<tmpdir>/relic.db`. The MCP server, CLI, API and dashboard share it.
 - `relic index` writes JSON to stdout and logs to stderr, which is what agents and CI consume.
 - `--watch` re-indexes incrementally on changes and pushes `graph-updated` SSE events. Branch switches are not detected — run `relic index` after a checkout.
+- `relic runtime <file>` re-indexes first, then upgrades matching `CALLS`/`TESTS` edges. `--runtime-format lcov|otel`
+  overrides format detection; `--json` prints the `RuntimeReport`. Static conflicts become `runtime-conflict`
+  diagnostics.
 
 ### Boundary rules
 
@@ -174,6 +183,8 @@ All routes are under `/api`. `repository` accepts either a repository id or a fi
 | GET    | `/graph/nodes/:id/neighborhood`     | `depth` (1–4, default 1), `limit`; forward + reverse traversal                                  |
 | POST   | `/impact`                           | Body `{ repository, nodeId \| symbol, maxDepth?, includeTests?, includeIndirectDependencies? }` |
 | GET    | `/cycles?repository=`               | Strongly connected components over `IMPORTS`/`CALLS`                                            |
+| GET    | `/search?repository=&q=&limit=`     | Ranked semantic/lexical search with keyword fallback                                            |
+| POST   | `/repositories/:id/runtime`         | Body `{ "format": "lcov" \| "otel", "content": "…" }`; upgrades runtime evidence                |
 | GET    | `/events`                           | SSE stream: `graph-updated` after every index/re-index                                          |
 | GET    | `/tests/related?repository=&nodeId= | symbol=`                                                                                        | Tests linked to a node |
 
@@ -210,26 +221,40 @@ Every edge stores confidence derived from its evidence source:
 | Evidence  | Confidence | Meaning                                                                       |
 | --------- | ---------- | ----------------------------------------------------------------------------- |
 | `static`  | 1.0        | Exact declaration/import/call resolution from the AST                         |
-| `runtime` | 0.9        | Observed at runtime (reserved for runtime collectors)                         |
+| `runtime` | 0.9        | Observed in lcov/OTLP runtime evidence (upgrades static `CALLS`/`TESTS`)      |
 | inferred  | 0.6        | Convention-based (e.g. property call via an import binding, endpoint mapping) |
 
-Diagnostics (`unresolved`, `parse-error`, `skipped`) are stored on the repository and surfaced by
-`index-status` and `get_graph_summary`. Unresolved references are never persisted as edges.
+Diagnostics (`unresolved`, `parse-error`, `skipped`, `runtime-conflict`) are stored on the repository and
+surfaced by `index-status` and `get_graph_summary`. Unresolved references are never persisted as edges, and
+runtime evidence never deletes a static edge.
 
 ## Indexing semantics
 
-- **Files:** `.ts .tsx .mts .cts .js .jsx .mjs .cjs`. Hidden entries and `node_modules`, `.git`, `dist`,
-  `build`, `coverage`, `.next`, `.turbo`, `out`, `.data` are skipped.
+- **Files:** `.ts .tsx .mts .cts .js .jsx .mjs .cjs .py .rs .java .go`, plus `Dockerfile*`, `*.dockerfile`,
+  `docker-compose*.yml/yaml`, and any YAML containing `apiVersion` + `kind`. Hidden entries and
+  `node_modules`, `.git`, `dist`, `build`, `coverage`, `.next`, `.turbo`, `out`, `.data` are skipped.
 - **Incremental:** files are compared by content hash. Changed files, deleted files, and the _importers_ of
-  changed/deleted files are re-analyzed so `IMPORTS` edges re-resolve.
-- **Two passes:** pass A extracts declarations, imports, calls, routes, SQL and frontend operations; pass B
-  resolves relationships against fresh declarations plus the database.
+  changed/deleted files are re-analyzed so `IMPORTS` edges re-resolve. Runtime-upgraded edges survive
+  re-indexing.
+- **Two passes:** pass A extracts declarations, imports, calls, routes, SQL, pub/sub calls and frontend
+  operations; pass B resolves relationships against fresh declarations plus the database.
 - **Extraction:** functions, classes, methods and variables become `symbol` nodes; route handlers
   (`get/post/put/patch/delete/head/options` with a `/`-prefixed path) become `route` nodes; `on` handlers
   become `api_operation`; SQL strings produce `READS`/`WRITES` edges to `database_table` nodes; test files
-  (`.test`/`.spec`, or anything under `tests/`, `__tests__/`) become `test` nodes with `TESTS` edges.
-- **Atomic:** the graph for a repository is replaced transactionally; deleted files and orphaned tables are
-  pruned. Edges whose endpoints are missing are dropped and reported as diagnostics.
+  (`.test`/`.spec`, `test_*.py`/`*_test.py`, `*_test.go`, `*Test.java`, Rust `tests/`, or anything under
+  `tests/`, `__tests__/`) become `test` nodes with `TESTS` edges.
+- **Python:** module/class/function symbols, `from`/`import` bindings, statically named calls, Flask/FastAPI/
+  Django routes, SQL strings, tests, and broker publish/subscribe calls follow the same contract as TypeScript.
+- **Rust, Java, Go:** module imports (`use crate::…`, `import a.b.C;`, `import "pkg"`), type/class/struct
+  containers, methods, calls, SQL, queues, tests, and common framework routes (actix/axum, Spring, Gin/net/http).
+  The per-language packages live under `packages/analyzer/*`; `analyzer-core` owns the shared contract.
+- **Queues and manifests:** publish/subscribe calls create `queue` nodes with `PUBLISHES`/`CONSUMES` edges;
+  compose services, Dockerfiles, and Kubernetes workloads create `service`/`deployment` nodes and
+  `DEPENDS_ON` edges.
+- **Monorepos:** a workspace sibling import (for example `@cross/lib`) links to nodes in another indexed
+  repository, and impact traversal crosses that boundary.
+- **Atomic:** the graph for a repository is replaced transactionally; deleted files and orphaned tables and
+  queues are pruned. Edges whose endpoints are missing are dropped and reported as diagnostics.
 - **Revision:** `git rev-parse HEAD` is recorded automatically unless `revision` is passed to
   `index_repository`.
 
@@ -246,16 +271,24 @@ Diagnostics (`unresolved`, `parse-error`, `skipped`) are stored on the repositor
 
 ```sh
 packages/
-  graph-core/             domain types, GraphRepository interface, GraphService (impact analysis)
+  core/                   domain types, GraphRepository interface, GraphService (impact analysis)
   database/               node:sqlite storage behind GraphRepository (recursive-CTE traversal)
-  analyzer-typescript/    TypeScript Compiler API analyzer (2 passes: extract, resolve)
-  indexer/                incremental indexing (hash change detection, importer re-expansion)
+  analyzer/
+    core/                 shared analyzer contract, discovery, resolver, manifests, owners
+    typescript/           TypeScript/JavaScript analyzer
+    python/               Python analyzer
+    rust/                 Rust analyzer
+    java/                 Java analyzer
+    go/                   Go analyzer
+  indexer/                incremental indexing (hash change detection, importer re-expansion), runtime evidence
 apps/
-  mcp-server/             MCP stdio server: 10 tools, 3 resources, 2 prompts
+  mcp/                    MCP stdio server: 15 tools, 3 resources, 2 prompts
   api/                    Hono API + the publishable package: `relic` CLI and `relic-mcp` bins
   dashboard/              React + React Flow graph explorer
 tests/
-  fixtures/starter-hono/  deterministic fixture (UserController → UserService.updateUser → UserRepository.update)
+  fixtures/analyzer/typescript/  deterministic fixture (UserController → UserService.updateUser → UserRepository.update)
+  fixtures/analyzer/{python,go,java,rust}/  per-language analyzer fixtures
+  fixtures/{cross-repo,infra}/   workspace and deployment scenarios
   unit|integration|security/
 ```
 

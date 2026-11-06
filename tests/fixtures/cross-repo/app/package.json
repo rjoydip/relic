@@ -1,0 +1,7 @@
+{
+  "name": "cross-repo-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "@cross/lib": "workspace:*"
+  }
+}

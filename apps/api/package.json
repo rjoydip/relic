@@ -1,7 +1,7 @@
 {
   "name": "relic-graph",
   "version": "0.1.0",
-  "description": "Relic — codebase dependency graph: MCP server, incremental TypeScript indexer, and visual dashboard",
+  "description": "Relic — codebase dependency graph: MCP server, incremental multi-language indexer, and visual dashboard",
   "keywords": [
     "code-graph",
     "dependency-graph",

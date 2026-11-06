@@ -7,7 +7,11 @@
     "declarationMap": false,
     "sourceMap": false,
     "types": ["bun"],
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@cross/lib": ["fixtures/cross-repo/lib/src/index.ts"]
+    }
   },
   "include": ["**/*.ts", "fixtures/**/*.ts"],
   "exclude": ["node_modules"]

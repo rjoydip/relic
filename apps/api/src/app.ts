@@ -9,7 +9,7 @@ import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { GraphError } from "@relic/graph-core";
 import type { EdgeType, GraphEdge, GraphNode, NodeType, RepositoryMeta } from "@relic/graph-core";
-import { openGraph, repositoryIdFor, type OpenGraph } from "@relic/indexer";
+import { ingestRuntime, openGraph, repositoryIdFor, type OpenGraph } from "@relic/indexer";
 
 export interface ApiOptions {
   dbPath: string;
@@ -213,6 +213,25 @@ export function buildApp(options: ApiOptions): RelicApp {
     }
   });
 
+  // Upgrade CALLS/TESTS evidence from lcov or OpenTelemetry observations.
+  app.post("/api/repositories/:id/runtime", async (c) => {
+    try {
+      const id = c.req.param("id");
+      const meta = requireIndex(id);
+      const body = await c.req.json<{
+        format?: string;
+        content?: string;
+      }>();
+      if (body.format !== "lcov" && body.format !== "otel")
+        throw new GraphError("INVALID_INPUT", "format must be lcov or otel");
+      if (typeof body.content !== "string")
+        throw new GraphError("INVALID_INPUT", "content is required");
+      return c.json(ingestRuntime(store.repository, id, body.format, body.content, meta.rootPath));
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
   app.post("/api/repositories/:id/index", async (c) => {
     try {
       const id = c.req.param("id");
@@ -386,6 +405,19 @@ export function buildApp(options: ApiOptions): RelicApp {
         nodeCount: graphNodes.length,
         edgeCount: graphEdges.length,
       });
+    } catch (err) {
+      return fail(c, err);
+    }
+  });
+
+  // Natural-language search over the local index; keyword fallback when empty.
+  app.get("/api/search", (c) => {
+    try {
+      const repository = resolveRepo(c.req.query("repository"));
+      requireIndex(repository);
+      const query = c.req.query("q") ?? "";
+      const limit = limitOf(c.req.query("limit"), 10);
+      return c.json(store.graph.semanticSearch(repository, query, { limit }));
     } catch (err) {
       return fail(c, err);
     }

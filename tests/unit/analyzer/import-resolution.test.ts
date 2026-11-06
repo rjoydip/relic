@@ -9,9 +9,9 @@ import {
   type RefInfo,
   type RefLookup,
 } from "@relic/analyzer-typescript";
-import { FIXTURE_ROOT } from "../../helpers";
+import { ANALYZER_FIXTURES } from "../../helpers";
 
-const repo = makeRepositoryContext(join(FIXTURE_ROOT, "..", "alias-repo"));
+const repo = makeRepositoryContext(join(ANALYZER_FIXTURES, "typescript", "alias-repo"));
 
 function lookupFrom(all: RefInfo[]): RefLookup {
   return {

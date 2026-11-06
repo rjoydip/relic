@@ -1,18 +1,18 @@
 # Relic — Plan
 
-**Status:** 2026-11-05. First release and roadmap items 19.0–19.3 are complete.
-Remaining work is the 19.4 "bigger bets" list at the end of this document.
+**Status:** 2026-11-06. First release, roadmap items 19.0–19.5 are complete.
 
 ## Product
 
-Relic is a static dependency-graph engine for TypeScript/JavaScript repositories.
-It indexes symbols, files, routes, tests, SQL tables, and their relationships, then
-exposes the same graph through:
+Relic is a static dependency-graph engine for TypeScript/JavaScript, Python,
+Rust, Java and Go repositories, plus the service/deployment manifests around
+them. It indexes symbols, files, routes, tests, SQL tables, queues, services,
+deployments, and their relationships, then exposes the same graph through:
 
 - an MCP stdio server for coding agents,
 - a local Hono HTTP API,
 - a React Flow dashboard,
-- a `relic` CLI for indexing, CI, export, and PR reports.
+- a `relic` CLI for indexing, CI, export, runtime evidence, and PR reports.
 
 The promise is evidence, not guesses: every edge carries a source `file:line`,
 a confidence (`static` 1.0 / `runtime` 0.9 / `inferred` 0.6), and a note when the
@@ -23,18 +23,23 @@ never invented edges.
 
 | Package                        | Responsibility                                                                                |
 | ------------------------------ | --------------------------------------------------------------------------------------------- |
-| `packages/graph-core`          | Domain types, `GraphRepository` contract, `GraphService` (traversal, impact, analytics, risk) |
+| `packages/core`                | Domain types, `GraphRepository` contract, `GraphService` (traversal, impact, analytics, risk) |
 | `packages/database`            | SQLite storage (`node:sqlite`) behind `GraphRepository`, recursive-CTE traversal              |
-| `packages/analyzer-typescript` | Two-pass TypeScript analyzer: extract declarations/imports/calls, then resolve relationships  |
+| `packages/analyzer/core`       | Shared contract, discovery, resolver, manifests, owners                                       |
+| `packages/analyzer/typescript` | TypeScript/JavaScript analyzer                                                                |
+| `packages/analyzer/python`     | Python analyzer                                                                               |
+| `packages/analyzer/rust`       | Rust analyzer                                                                                 |
+| `packages/analyzer/java`       | Java analyzer                                                                                 |
+| `packages/analyzer/go`         | Go analyzer                                                                                   |
 | `packages/indexer`             | Incremental indexing, change detection, owner metadata, git-diff helpers                      |
-| `apps/mcp-server`              | MCP tools, resources, prompts over stdio                                                      |
+| `apps/mcp`                     | MCP tools, resources, prompts over stdio                                                      |
 | `apps/api`                     | Hono API, publishable `relic` / `relic-mcp` package, CLI, dashboard host                      |
 | `apps/dashboard`               | React + React Flow explorer                                                                   |
 
 **Data flow:** walk repository → extract per file → resolve cross-file edges →
 persist transactionally → query through `GraphService` → MCP / HTTP / CLI / dashboard.
 
-**Invariants**
+### Invariants
 
 - Node identity derives from repository + path + qualified name, not line numbers.
 - Edges are only emitted when a target resolves; unresolved targets are diagnostics.
@@ -56,7 +61,7 @@ bun run test:e2e
 
 ## Definition of done (first release)
 
-- [x] Indexes TypeScript repositories incrementally (delete/rename handled as remove + add).
+- [x] Indexes TypeScript/JavaScript, Python, Rust, Java and Go repositories incrementally (delete/rename handled as remove + add).
 - [x] Resolves relative imports, tsconfig `paths`/`baseUrl` aliases, and workspace packages.
 - [x] Resolves statically identifiable calls, routes, GraphQL/WebSocket operations, SQL, and tests.
 - [x] Stores nodes/edges through `GraphRepository` with evidence and confidence.
@@ -97,21 +102,32 @@ boundary rules; `relic impact`; `relic export` (Mermaid/DOT); `relic init`
 composite action for PR comments. Branch switches still require an explicit
 re-index.
 
-## Next: 19.4 bigger bets
+### 19.4 — Bigger bets
 
-| Feature                            | Acceptance                                                                                                                           |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Second language analyzer           | A Python analyzer behind the same contract; fixture parity on symbols, calls, tests, and routes; no graph-core changes.              |
-| Queue / service / deployment nodes | Publish/subscribe calls, service manifests, and Docker/K8s references become nodes and edges with evidence.                          |
-| Runtime evidence                   | lcov or OpenTelemetry ingest upgrades `TESTS`/`CALLS` edges to `runtime`; conflicts with static edges are reported, not overwritten. |
-| Cross-repo / monorepo graph        | Workspace sibling imports link to nodes in another indexed repository; impact traverses the boundary.                                |
-| Semantic search                    | Natural-language query returns ranked symbols with evidence; falls back to keyword search without an index.                          |
+- **Python analyzer** behind the shared `extractSourceFile` contract: symbols,
+  class-qualified names, imports, calls, Flask/FastAPI/Django routes, SQL, tests,
+  and pub/sub calls. Covered by a fixture and indexed end-to-end.
+- **Queue / service / deployment nodes** from pub/sub calls plus docker-compose,
+  Dockerfile, and Kubernetes manifests, linked with `PUBLISHES`/`CONSUMES` and
+  `DEPENDS_ON` edges.
+- **Runtime evidence** ingest from lcov or OTLP JSON. `CALLS`/`TESTS` edges are
+  upgraded to `runtime` confidence; static conflicts become `runtime-conflict`
+  diagnostics and are never overwritten. Available through the API, MCP, and
+  `relic runtime`.
+- **Cross-repo / monorepo graph**: workspace sibling imports resolve to nodes in
+  another indexed repository, and the database validates edges against all known
+  nodes so impact traverses repository boundaries.
+- **Semantic search**: deterministic local lexical BM25 ranking
+  (`search_semantic`, `GET /api/search`) with keyword fallback when no index or
+  no ranked hits exist.
 
-## Sequencing
+### 19.5 — Polyglot analyzer packages
 
-1. Ship 19.0–19.3 (done).
-2. Add 19.4 capabilities only when a real repository or language demands them.
-3. Keep the quality gates and evidence model intact as analyzers and sources grow.
+- `analyzer-core` owns discovery, the extracted-file contract, resolution, manifests and owners.
+- One package per language: `analyzer-typescript`, `analyzer-python`, `analyzer-rust`,
+  `analyzer-java`, `analyzer-go`; the indexer dispatches by extension.
+- Rust/Java/Go share a regex-driven brace-language engine for symbols, imports,
+  calls, SQL, queues, tests, and actix/axum, Spring, Gin and net/http routes.
 
 ## Non-goals and constraints
 
